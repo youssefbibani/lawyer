@@ -1,0 +1,348 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: 0 0% 5%;
+  --night: 240 30% 14%;
+  --gold: 43 53% 54%;
+  --gold-soft: 43 53% 64%;
+  --gold-deep: 43 60% 38%;
+  --cream: 36 35% 93%;
+  --warm-white: 60 25% 98%;
+  --alert: 12 62% 44%;
+  --alert-foreground: 36 35% 96%;
+  --success: 142 35% 30%;
+  --success-foreground: 36 35% 96%;
+  --border: 36 18% 84%;
+  --radius: 0.25rem;
+
+  --background: var(--warm-white);
+  --foreground: 240 15% 12%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 240 15% 12%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 15% 12%;
+
+  --primary: var(--night);
+  --primary-foreground: 36 35% 96%;
+
+  --secondary: 36 20% 92%;
+  --secondary-foreground: 240 20% 16%;
+
+  --muted: 36 15% 92%;
+  --muted-foreground: 240 8% 40%;
+
+  --accent: var(--gold);
+  --accent-foreground: 240 30% 14%;
+
+  --destructive: var(--alert);
+  --destructive-foreground: 36 35% 96%;
+
+  --input: 36 18% 84%;
+  --ring: var(--gold);
+
+  --sidebar-background: 240 30% 11%;
+  --sidebar-foreground: 36 20% 88%;
+  --sidebar-border: 240 25% 20%;
+  --sidebar-accent: 240 25% 18%;
+
+  --shadow-sm: 0 1px 2px 0 rgb(13 13 13 / 0.05);
+  --shadow-md: 0 2px 10px -2px rgb(13 13 13 / 0.08), 0 1px 3px -1px rgb(13 13 13 / 0.06);
+  --shadow-lg: 0 10px 30px -8px rgb(13 13 13 / 0.14), 0 2px 8px -2px rgb(13 13 13 / 0.08);
+  --shadow-gold: 0 4px 20px -4px hsl(43 53% 54% / 0.35);
+}
+
+.dark {
+  --background: 240 28% 9%;
+  --foreground: 36 25% 92%;
+
+  --card: 240 26% 12%;
+  --card-foreground: 36 25% 92%;
+
+  --popover: 240 26% 12%;
+  --popover-foreground: 36 25% 92%;
+
+  --primary: var(--gold);
+  --primary-foreground: 240 30% 12%;
+
+  --secondary: 240 22% 18%;
+  --secondary-foreground: 36 20% 90%;
+
+  --muted: 240 20% 17%;
+  --muted-foreground: 36 10% 65%;
+
+  --accent: var(--gold);
+  --accent-foreground: 240 30% 12%;
+
+  --destructive: var(--alert);
+  --destructive-foreground: 36 35% 96%;
+
+  --border: 240 18% 22%;
+  --input: 240 18% 22%;
+  --ring: var(--gold);
+
+  --sidebar-background: 240 32% 7%;
+  --sidebar-foreground: 36 20% 88%;
+  --sidebar-border: 240 25% 16%;
+  --sidebar-accent: 240 25% 14%;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 2px 10px -2px rgb(0 0 0 / 0.45), 0 1px 3px -1px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 30px -8px rgb(0 0 0 / 0.55), 0 2px 8px -2px rgb(0 0 0 / 0.35);
+  --shadow-gold: 0 4px 24px -4px hsl(43 53% 54% / 0.3);
+}
+
+html {
+  direction: rtl;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  --bottom-nav-height: 4rem;
+  --keyboard-inset: 0px;
+  --scrollbar-thumb: hsl(var(--foreground) / 0.28);
+  /* Anchors and focused fields land below the sticky header instead of hidden behind it. */
+  scroll-padding-top: calc(4.5rem + env(safe-area-inset-top));
+  scroll-padding-bottom: 2rem;
+  /* Reserve the scrollbar lane so the layout does not jump between short and long pages. */
+  scrollbar-gutter: stable;
+}
+
+/* Themed, flat scrollbars everywhere (no arrow buttons, no white OS track). The page itself keeps
+   a normal-width bar; nested scrollers (lists, tables, dialogs) get a thin one. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+html {
+  scrollbar-width: auto;
+}
+
+@supports not (scrollbar-width: thin) {
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-button {
+    display: none;
+  }
+}
+
+/* User-selected text scale (Settings → حجم الخط). rem-based UI scales with it. */
+html[data-font-size="small"] {
+  font-size: 15px;
+}
+html[data-font-size="large"] {
+  font-size: 18px;
+}
+
+#root {
+  overflow-x: clip;
+  min-height: 100dvh;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground;
+  font-family: "Noto Kufi Arabic", sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+
+a,
+button,
+[role="button"],
+label {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+h1, h2, h3, .font-heading {
+  font-family: "Amiri", "Noto Naskh Arabic", serif;
+  overflow-wrap: anywhere;
+}
+
+.font-legal {
+  font-family: "Noto Naskh Arabic", serif;
+}
+
+.font-mono, .ref-tag, .tabular {
+  font-family: "DM Mono", monospace;
+}
+
+@layer components {
+  .ref-tag {
+    @apply inline-flex items-center rounded-sm border border-border bg-muted px-2 py-0.5 text-xs tracking-wide text-foreground/80;
+    font-family: "DM Mono", monospace;
+    direction: ltr;
+  }
+
+  .gold-line {
+    @apply h-px w-16;
+    background: linear-gradient(to left, transparent, hsl(var(--gold)), transparent);
+  }
+
+  .card-elevated {
+    @apply rounded-[var(--radius)] border border-border bg-card;
+    box-shadow: var(--shadow-md);
+  }
+
+  .stat-card {
+    @apply card-elevated p-5 transition-shadow duration-200;
+  }
+
+  .stat-card:hover {
+    border-color: hsl(var(--gold) / 0.5);
+    box-shadow: var(--shadow-gold);
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.35s ease-out both;
+  }
+
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out both;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Scrollbar for lists on the dark sidebar: faint until the pointer is over it. */
+  .sidebar-scroll {
+    --scrollbar-thumb: hsl(var(--sidebar-foreground) / 0.16);
+  }
+  .sidebar-scroll:hover {
+    --scrollbar-thumb: hsl(var(--sidebar-foreground) / 0.38);
+  }
+
+  /* Month calendar: a hearing chip reads "0842 — 09:00" on one line when its day cell is wide enough,
+     and stacks the reference over the time (no dash, no truncation) when the calendar is squeezed. */
+  .hearing-cell {
+    container-type: inline-size;
+  }
+  .hearing-chip-sep {
+    display: none;
+  }
+  @container (min-width: 5.5rem) {
+    .hearing-chip-sep {
+      display: inline;
+    }
+  }
+
+  /* <ScrollFade>: soften the edge(s) where content continues, so clipped lists read as scrollable. */
+  .scroll-fade {
+    --scroll-fade: 1.75rem;
+  }
+  .scroll-fade[data-fade-top="true"] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade));
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade));
+  }
+  .scroll-fade[data-fade-bottom="true"] {
+    -webkit-mask-image: linear-gradient(to top, transparent, #000 var(--scroll-fade));
+    mask-image: linear-gradient(to top, transparent, #000 var(--scroll-fade));
+  }
+  .scroll-fade[data-fade-top="true"][data-fade-bottom="true"] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade), #000 calc(100% - var(--scroll-fade)), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade), #000 calc(100% - var(--scroll-fade)), transparent);
+  }
+
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  /* Space reserved for the fixed bottom navigation on phones/tablets. */
+  .pb-bottom-nav {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 1rem);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden bg-muted rounded-[var(--radius)];
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+    animation: shimmer 1.6s infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+::selection {
+  background: hsl(var(--gold) / 0.3);
+}
+
+/* Disable the hover-only lift on touch devices so cards do not stay "stuck" highlighted. */
+@media (hover: none) {
+  .stat-card:hover {
+    border-color: hsl(var(--border));
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #0d0d0d !important;
+  }
+  .no-print,
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .print-break-avoid {
+    break-inside: avoid;
+  }
+}

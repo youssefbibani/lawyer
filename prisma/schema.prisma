@@ -1,0 +1,764 @@
+// Qasr al-Adala — law-office management database (PostgreSQL).
+//
+// Tenant isolation is enforced twice: every service query filters on the session's office, and
+// every child row references its parent through a composite (id, organizationId) foreign key, so a
+// hearing / payment / task can never point at another office's case at the database level.
+// Money uses numeric(14,3) (Tunisian dinar has 3 decimals — millimes). No floating point.
+// Extra constraints that Prisma cannot express (CHECKs, append-only triggers) live in migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Better Auth tables (field names must match Better Auth's configuration).
+// ————————————————————————————————————————————————————————————————————————
+
+model User {
+  id               String    @id
+  name             String
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  image            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+  twoFactorEnabled Boolean?  @default(false)
+
+  sessions    Session[]
+  accounts    Account[]
+  members     Member[]
+  invitations Invitation[]
+  twoFactors  TwoFactor[]
+
+  clientsCreated      Client[]       @relation("ClientCreatedBy")
+  casesCreated        Case[]         @relation("CaseCreatedBy")
+  notesAuthored       CaseNote[]     @relation("NoteAuthor")
+  hearingsCreated     Hearing[]      @relation("HearingCreatedBy")
+  hearingsUpdated     Hearing[]      @relation("HearingUpdatedBy")
+  hearingEvents       HearingEvent[] @relation("HearingEventActor")
+  agreementsCreated   FeeAgreement[] @relation("AgreementCreatedBy")
+  paymentsCreated     Payment[]      @relation("PaymentCreatedBy")
+  paymentsVoided      Payment[]      @relation("PaymentVoidedBy")
+  receiptsIssued      Receipt[]      @relation("ReceiptIssuedBy")
+  receiptsCancelled   Receipt[]      @relation("ReceiptCancelledBy")
+  tasksCreated        Task[]         @relation("TaskCreatedBy")
+  tasksCompleted      Task[]         @relation("TaskCompletedBy")
+  tasksCancelled      Task[]         @relation("TaskCancelledBy")
+  remindersCreated    Reminder[]     @relation("ReminderCreatedBy")
+  auditEntries        AuditLog[]     @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model Organization {
+  id        String   @id
+  name      String
+  slug      String   @unique
+  logo      String?
+  createdAt DateTime
+  metadata  String?
+
+  members     Member[]
+  invitations Invitation[]
+  settings    OfficeSettings?
+  clients     Client[]
+  cases       Case[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+/// Office membership. role ∈ admin | lawyer | clerk (validated by the API).
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("clerk")
+  createdAt      DateTime
+  /// Non-destructive removal: deactivated members cannot sign in or act, history is kept.
+  deactivatedAt  DateTime?
+  phone          String?
+  /// Bar association registration number (lawyers).
+  barNumber      String?
+
+  casesAsLawyer   Case[]                  @relation("CaseLawyer")
+  caseMemberships CaseMember[]
+  tasksAssigned   Task[]                  @relation("TaskAssignee")
+  reminders       Reminder[]              @relation("ReminderRecipient")
+  preferences     NotificationPreference?
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("members")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitations")
+}
+
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("two_factors")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rate_limits")
+}
+
+/// Per-account sign-in throttling (complements Better Auth's per-IP limits). The key is a
+/// SHA-256 of the normalised email, so no address is stored in clear.
+model LoginThrottle {
+  key            String    @id
+  failures       Int       @default(0)
+  firstFailureAt DateTime
+  lockedUntil    DateTime?
+
+  @@map("login_throttles")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Office configuration
+// ————————————————————————————————————————————————————————————————————————
+
+model OfficeSettings {
+  organizationId          String       @id
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  legalName               String
+  email                   String?
+  phone                   String?
+  address                 String?
+  city                    String?
+  /// Matricule fiscal
+  taxId                   String?
+  barRegistration         String?
+  timeZone                String       @default("Africa/Tunis")
+  defaultCurrency         String       @default("TND") @db.Char(3)
+  /// Policy: lawyers see every office case (otherwise only assigned / staffed ones).
+  lawyersSeeAllCases      Boolean      @default(true)
+  /// Policy: clerks see every office case (otherwise only cases they are staffed on).
+  clerksSeeAllCases       Boolean      @default(false)
+  /// Policy: clerks may record payments (receipts are still issued by the system).
+  clerksCanRecordPayments Boolean      @default(false)
+  updatedAt               DateTime     @updatedAt
+
+  @@map("office_settings")
+}
+
+model NotificationPreference {
+  organizationId         String
+  userId                 String
+  member                 Member  @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade)
+  hearingReminders       Boolean @default(true)
+  taskReminders          Boolean @default(true)
+  scheduleConflicts      Boolean @default(true)
+  emailEnabled           Boolean @default(false)
+  defaultReminderMinutes Int     @default(1440)
+
+  @@id([organizationId, userId])
+  @@map("notification_preferences")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Clients and cases
+// ————————————————————————————————————————————————————————————————————————
+
+enum ClientType {
+  INDIVIDUAL
+  COMPANY
+  HEIRS
+  ADMINISTRATION
+  OTHER
+}
+
+model Client {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  type           ClientType
+  fullName       String
+  phone          String?
+  email          String?
+  address        String?
+  /// CIN / passport / matricule fiscal
+  nationalId     String?
+  notes          String?
+  archivedAt     DateTime?
+  /// Normalised Arabic/Latin text used for search (trigram index in migration).
+  searchText     String       @default("")
+  version        Int          @default(1)
+  createdById    String
+  createdBy      User         @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  cases         CaseClient[]
+  feeAgreements FeeAgreement[]
+  receipts      Receipt[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, fullName])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "clients_searchText_trgm_idx")
+  @@map("clients")
+}
+
+enum CaseType {
+  INHERITANCE
+  CIVIL
+  CASSATION
+  COMMERCIAL
+  REAL_ESTATE
+  CRIMINAL
+  ADMINISTRATIVE
+  LABOR
+  FAMILY
+  OTHER
+}
+
+enum CaseStatus {
+  ACTIVE
+  POSTPONED
+  CLOSED
+}
+
+model Case {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  /// Unique per office (office numbering policy, e.g. CC/2025/0124).
+  reference        String
+  type             CaseType
+  status           CaseStatus   @default(ACTIVE)
+  court            String
+  chamber          String?
+  description      String?
+  openedOn         DateTime     @db.Date
+  closedOn         DateTime?    @db.Date
+  assignedLawyerId String
+  assignedLawyer   Member       @relation("CaseLawyer", fields: [organizationId, assignedLawyerId], references: [organizationId, userId], onDelete: Restrict)
+  archivedAt       DateTime?
+  /// Normalised reference/court/description text used for search (trigram index in migration).
+  searchText       String       @default("")
+  version          Int          @default(1)
+  createdById      String
+  createdBy        User         @relation("CaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  clients       CaseClient[]
+  members       CaseMember[]
+  notes         CaseNote[]
+  hearings      Hearing[]
+  feeAgreements FeeAgreement[]
+  receipts      Receipt[]
+  tasks         Task[]
+
+  @@unique([organizationId, reference])
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, assignedLawyerId])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "cases_searchText_trgm_idx")
+  @@map("cases")
+}
+
+enum CaseClientRole {
+  PRINCIPAL
+  CO_CLIENT
+  REPRESENTATIVE
+}
+
+model CaseClient {
+  organizationId String
+  caseId         String
+  clientId       String
+  role           CaseClientRole @default(PRINCIPAL)
+  createdAt      DateTime       @default(now())
+  case           Case           @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  client         Client         @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@id([caseId, clientId])
+  @@index([organizationId, clientId])
+  @@map("case_clients")
+}
+
+/// Staff explicitly assigned to a case (drives per-case access for clerks).
+model CaseMember {
+  organizationId String
+  caseId         String
+  userId         String
+  createdAt      DateTime @default(now())
+  case           Case     @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  member         Member   @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade)
+
+  @@id([caseId, userId])
+  @@index([organizationId, userId])
+  @@map("case_members")
+}
+
+model CaseNote {
+  id             String   @id @default(cuid())
+  organizationId String
+  caseId         String
+  case           Case     @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  authorId       String
+  author         User     @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  content        String
+  createdAt      DateTime @default(now())
+
+  @@index([caseId, createdAt])
+  @@map("case_notes")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Hearings
+// ————————————————————————————————————————————————————————————————————————
+
+enum HearingStatus {
+  SCHEDULED
+  HELD
+  POSTPONED
+  CANCELLED
+}
+
+model Hearing {
+  id              String        @id @default(cuid())
+  organizationId  String
+  caseId          String
+  case            Case          @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  /// Absolute instant (UTC). The wall-clock time is always entered and shown in `timeZone`.
+  startsAt        DateTime      @db.Timestamptz(3)
+  timeZone        String        @default("Africa/Tunis")
+  durationMinutes Int           @default(60)
+  court           String
+  chamber         String?
+  room            String?
+  type            String
+  status          HearingStatus @default(SCHEDULED)
+  notes           String?
+  version         Int           @default(1)
+  createdById     String
+  createdBy       User          @relation("HearingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById     String
+  updatedBy       User          @relation("HearingUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  events    HearingEvent[]
+  reminders Reminder[]
+  tasks     Task[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, startsAt])
+  @@index([caseId, startsAt])
+  @@map("hearings")
+}
+
+enum HearingEventKind {
+  CREATED
+  UPDATED
+  RESCHEDULED
+  STATUS_CHANGED
+  CANCELLED
+}
+
+/// Append-only hearing history (rescheduling, cancellations, edits).
+model HearingEvent {
+  id             String           @id @default(cuid())
+  organizationId String
+  hearingId      String
+  hearing        Hearing          @relation(fields: [hearingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  kind           HearingEventKind
+  reason         String?
+  before         Json?
+  after          Json?
+  actorId        String
+  actor          User             @relation("HearingEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt      DateTime         @default(now())
+
+  @@index([hearingId, createdAt])
+  @@map("hearing_events")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Fees, payments, receipts
+// ————————————————————————————————————————————————————————————————————————
+
+enum FeeAgreementStatus {
+  ACTIVE
+  SETTLED
+  CANCELLED
+}
+
+model FeeAgreement {
+  id             String             @id @default(cuid())
+  organizationId String
+  caseId         String
+  case           Case               @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  /// Paying client (optional when the case has a single client).
+  clientId       String?
+  client         Client?            @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  title          String?
+  amount         Decimal            @db.Decimal(14, 3)
+  currency       String             @default("TND") @db.Char(3)
+  paymentTerms   String?
+  status         FeeAgreementStatus @default(ACTIVE)
+  /// Optional client-generated key: a retried creation never produces a second agreement.
+  idempotencyKey String?
+  version        Int                @default(1)
+  createdById    String
+  createdBy      User               @relation("AgreementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  payments Payment[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, caseId])
+  @@map("fee_agreements")
+}
+
+enum PaymentMethod {
+  CASH
+  CHECK
+  BANK_TRANSFER
+  CARD
+  MOBILE
+  OTHER
+}
+
+enum PaymentStatus {
+  RECORDED
+  VOIDED
+}
+
+/// Payments are never deleted or edited: a mistake is voided (with reason) and re-recorded.
+model Payment {
+  id             String        @id @default(cuid())
+  organizationId String
+  agreementId    String
+  agreement      FeeAgreement  @relation(fields: [agreementId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  amount         Decimal       @db.Decimal(14, 3)
+  currency       String        @db.Char(3)
+  paidOn         DateTime      @db.Date
+  method         PaymentMethod
+  /// Cheque / transfer reference as written by the payer.
+  reference      String?
+  /// Copy of `reference` while the payment is RECORDED (NULL once voided) — makes duplicate
+  /// references impossible for live payments while allowing a voided one to be re-recorded.
+  referenceKey   String?
+  notes          String?
+  status         PaymentStatus @default(RECORDED)
+  /// Client-generated key: retries of the same submission can never create a second payment.
+  idempotencyKey String
+  createdById    String
+  createdBy      User          @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime      @default(now())
+  voidedAt       DateTime?
+  voidedById     String?
+  voidedBy       User?         @relation("PaymentVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+  voidReason     String?
+
+  receipt Receipt?
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, agreementId, method, referenceKey])
+  @@unique([id, organizationId])
+  @@index([agreementId])
+  @@map("payments")
+}
+
+enum ReceiptStatus {
+  ISSUED
+  CANCELLED
+}
+
+/// Issued receipts are immutable (enforced by a trigger); cancellation is a status change with a reason.
+model Receipt {
+  id             String        @id @default(cuid())
+  organizationId String
+  /// Human-readable number, unique per office, e.g. REC-2026-000042.
+  number         String
+  year           Int
+  sequence       Int
+  paymentId      String
+  payment        Payment       @relation(fields: [paymentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  caseId         String
+  case           Case          @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  clientId       String?
+  client         Client?       @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  amount         Decimal       @db.Decimal(14, 3)
+  currency       String        @db.Char(3)
+  issuedOn       DateTime      @db.Date
+  issuedById     String
+  issuedBy       User          @relation("ReceiptIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
+  status         ReceiptStatus @default(ISSUED)
+  cancelledAt    DateTime?
+  cancelledById  String?
+  cancelledBy    User?         @relation("ReceiptCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  cancelReason   String?
+  /// Everything printed on the receipt, frozen at issuance (office, client, case, payment details),
+  /// so a later rename or edit can never change an issued receipt.
+  snapshot       Json
+  /// The rendered PDF exactly as issued (write-once) and its SHA-256.
+  pdf            Bytes?
+  pdfSha256      String?
+  pdfGeneratedAt DateTime?
+  pdfError       String?
+  createdAt      DateTime      @default(now())
+
+  @@unique([paymentId, organizationId])
+  @@unique([organizationId, number])
+  @@unique([organizationId, year, sequence])
+  @@index([organizationId, issuedOn])
+  @@map("receipts")
+}
+
+/// Gap-free receipt numbering per office and year, incremented inside the payment transaction.
+model ReceiptCounter {
+  organizationId String
+  year           Int
+  lastValue      Int    @default(0)
+
+  @@id([organizationId, year])
+  @@map("receipt_counters")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Tasks and reminders (manual only)
+// ————————————————————————————————————————————————————————————————————————
+
+enum TaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum TaskKind {
+  TASK
+  REMINDER
+}
+
+enum TaskRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model Task {
+  id             String         @id @default(cuid())
+  organizationId String
+  kind           TaskKind       @default(TASK)
+  title          String
+  description    String?
+  caseId         String?
+  case           Case?          @relation(fields: [caseId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  hearingId      String?
+  hearing        Hearing?       @relation(fields: [hearingId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  recurrence     TaskRecurrence @default(NONE)
+  /// The occurrence this one was generated from (unique: completing twice never spawns twice).
+  spawnedFromId  String?        @unique
+  /// Requested delivery channels; actual delivery state lives in Reminder rows.
+  notifyInApp    Boolean        @default(true)
+  notifyEmail    Boolean        @default(false)
+  cancelledAt    DateTime?
+  cancelledById  String?
+  cancelledBy    User?          @relation("TaskCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  assigneeId     String
+  assignee       Member       @relation("TaskAssignee", fields: [organizationId, assigneeId], references: [organizationId, userId], onDelete: Restrict)
+  /// Calendar due date. A due time is optional and never invented when absent.
+  dueDate        DateTime?    @db.Date
+  dueTime        String?
+  /// Exact instant, only when a due time was given (computed in the office time zone).
+  dueAt          DateTime?    @db.Timestamptz(3)
+  priority       TaskPriority @default(MEDIUM)
+  status         TaskStatus   @default(OPEN)
+  completedAt    DateTime?
+  completedById  String?
+  completedBy    User?        @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+  version        Int          @default(1)
+  createdById    String
+  createdBy      User         @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  reminders Reminder[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, status, dueDate])
+  @@index([organizationId, assigneeId])
+  @@map("tasks")
+}
+
+enum ReminderChannel {
+  IN_APP
+  EMAIL
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+  /// The channel has no configured provider (e.g. no SMTP): honestly not delivered.
+  NOT_CONFIGURED
+}
+
+/// A manual reminder about exactly one task or hearing (CHECK constraint in migration).
+model Reminder {
+  id             String          @id @default(cuid())
+  organizationId String
+  taskId         String?
+  task           Task?           @relation(fields: [taskId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  hearingId      String?
+  hearing        Hearing?        @relation(fields: [hearingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  recipientId    String
+  recipient      Member          @relation("ReminderRecipient", fields: [organizationId, recipientId], references: [organizationId, userId], onDelete: Cascade)
+  scheduledAt    DateTime        @db.Timestamptz(3)
+  channel        ReminderChannel
+  status         ReminderStatus  @default(PENDING)
+  attempts       Int             @default(0)
+  maxAttempts    Int             @default(3)
+  nextAttemptAt  DateTime?       @db.Timestamptz(3)
+  lastAttemptAt  DateTime?
+  lastError      String?
+  deliveredAt    DateTime?
+  /// In-app reminders: when the recipient acknowledged it.
+  readAt         DateTime?
+  note           String?
+  createdById    String
+  createdBy      User            @relation("ReminderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([organizationId, recipientId, scheduledAt])
+  @@map("reminders")
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Audit
+// ————————————————————————————————————————————————————————————————————————
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+/// Append-only (UPDATE/DELETE blocked by a trigger). Never contains passwords, tokens or secrets.
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actorId        String?
+  actor          User?         @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  resourceType   String
+  resourceId     String?
+  operation      String
+  outcome        AuditOutcome  @default(SUCCESS)
+  /// Case the operation concerns (drives the case timeline). No FK: entries outlive any record.
+  caseId         String?
+  /// Short non-confidential Arabic description (references and actions only, never case content).
+  summary        String?
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  userAgent      String?
+  requestId      String?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, resourceType, resourceId])
+  @@index([organizationId, caseId, createdAt])
+  @@map("audit_logs")
+}
