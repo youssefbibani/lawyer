@@ -11,4 +11,5 @@ Object.assign(process.env, {
   TRUST_PROXY: "true",
   REMINDER_WORKER: "false",
   SMTP_URL: "",
+  CRON_SECRET: "test-cron-secret-0123456789",
 });

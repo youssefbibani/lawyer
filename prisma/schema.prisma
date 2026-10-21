@@ -7,7 +7,10 @@
 // Extra constraints that Prisma cannot express (CHECKs, append-only triggers) live in migrations.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" = the machine running `prisma generate` (development, Docker). The extra target is the
+  // engine Vercel's runtime (Amazon Linux) needs, generated explicitly instead of relying on auto-detection.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

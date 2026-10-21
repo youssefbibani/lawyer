@@ -8,6 +8,7 @@ import type { AppEnv } from "./http/context.js";
 import { AppError, errorBody, fromDatabase } from "./http/errors.js";
 import { clientIp, ctxOf, originCheck, requestId } from "./http/middleware.js";
 import { authRoutes } from "./routes/auth.js";
+import { cronRoutes } from "./routes/cron.js";
 import { v1Routes } from "./routes/v1.js";
 import { audit } from "./services/audit.js";
 
@@ -49,6 +50,8 @@ export function createApp() {
   app.route("/api/auth", authRoutes());
   app.use("/api/v1/*", originCheck);
   app.route("/api/v1", v1Routes());
+  // Scheduled jobs (secret header, no cookies): see routes/cron.ts.
+  app.route("/api/cron", cronRoutes());
   app.all("/api/*", (c) => c.json(errorBody(new AppError("NOT_FOUND", "المسار غير موجود."), c.get("requestId")), 404));
 
   app.onError(async (err, c) => {

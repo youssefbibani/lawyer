@@ -59,6 +59,8 @@ Good first things to try, per account, are in [docs/TESTING_GUIDE.md](docs/TESTI
 | [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) | Step-by-step test scenarios per account, with expected results |
 | [docs/UI_AND_DESIGN.md](docs/UI_AND_DESIGN.md) | Visual language, responsive and scrolling behaviour, accessibility |
 | [README_BACKEND.md](README_BACKEND.md) | Installation, configuration, database, security model, deployment |
+| [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md) | Hosting on Vercel + Neon: steps, environment variables, limits, troubleshooting |
+| [docs/DEPLOY_VERCEL_CODE_CHANGES.md](docs/DEPLOY_VERCEL_CODE_CHANGES.md) | The code changes that let the API run on Vercel (reference: what changed and why) |
 | [docs/API.md](docs/API.md) | HTTP API reference |
 
 ## Run locally

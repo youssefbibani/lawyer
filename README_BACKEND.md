@@ -290,6 +290,13 @@ Put a TLS-terminating reverse proxy in front of `app`, forward `X-Forwarded-For`
 `TRUST_PROXY=true`, and set `PUBLIC_URL` to the `https://` address. Production cookies are Secure-only:
 sign-in does not work over plain HTTP.
 
+### Vercel
+
+The web app and the API can be hosted on Vercel with a hosted PostgreSQL (Neon). The API runs there as a
+serverless function, so receipt PDFs and the reminder worker need special handling. Guides:
+**[docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md)** (steps, limits, troubleshooting) and
+**[docs/DEPLOY_VERCEL_CODE_CHANGES.md](docs/DEPLOY_VERCEL_CODE_CHANGES.md)** (what the Vercel support changed in the code).
+
 ### Without Docker
 
 ```bash
