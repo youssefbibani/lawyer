@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { loadEnv } from "../env.js";
-import { call } from "./helpers.js";
+import vercelHandler from "../vercel-handler.js";
+import { call, createTestOffice, freshIp, ORIGIN, PASSWORD } from "./helpers.js";
 
 const SECRET = process.env.CRON_SECRET!;
 
@@ -52,6 +53,27 @@ describe("environment on Vercel", () => {
     expect(loadEnv(source({ CRON_SECRET: "" })).CRON_SECRET).toBeUndefined();
     expect(loadEnv(source({ CRON_SECRET: "a-long-enough-secret-value" })).CRON_SECRET).toBe("a-long-enough-secret-value");
     expect(() => loadEnv(source({ CRON_SECRET: "too-short" }))).toThrow(/CRON_SECRET must be at least 16 characters/);
+  });
+});
+
+describe("Vercel entry point", () => {
+  // Regression: wrapped with @hono/node-server/vercel, every POST reached the app with an empty body on Vercel
+  // (its Node runtime consumes the body before the handler runs), so nobody could sign in.
+  it("is a Web-standard fetch handler, which Vercel feeds with a complete Request", () => {
+    expect(typeof vercelHandler.fetch).toBe("function");
+  });
+
+  it("signs in from a JSON POST body", async () => {
+    const office = await createTestOffice();
+    const res = await vercelHandler.fetch(
+      new Request(`${ORIGIN}/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: ORIGIN, "x-forwarded-for": freshIp() },
+        body: JSON.stringify({ email: office.lawyer.email, password: PASSWORD }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.getSetCookie().length).toBeGreaterThan(0);
   });
 });
 

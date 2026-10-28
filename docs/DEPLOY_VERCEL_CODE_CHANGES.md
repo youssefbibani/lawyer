@@ -20,9 +20,16 @@ Checked, on a Windows machine, with exactly the files below:
   function (`api/index.js`, Node 22), generated the right routing, and packaged it at about 17 MB (limit 250 MB).
 - 12 new tests, plus the existing suites (143 web tests, 93 server tests), passed.
 
-**Not checked:** an actual deployment on a Vercel account, the Neon database, Vercel's cron, or the Linux Prisma
-engine inside a Vercel-built function (the last confirmation build was interrupted). Treat the first real deploy
-as the final test; [DEPLOY_VERCEL.md](DEPLOY_VERCEL.md) has a troubleshooting table for it.
+**What those checks missed:** they ran the function in a plain Node server, so they did not reproduce Vercel's
+own request handling. The first real deployment showed it: POST bodies were lost (see the note under
+`server/vercel-handler.ts`). The function now has a test that sends a real sign-in POST through the exact handler
+Vercel calls.
+
+**Confirmed on a real deployment (Vercel + Neon):** the build and migrations, the Linux Prisma engine, and
+`/api/health` answering `{"status":"ok","database":"ok"}`.
+
+**Not checked yet:** sign-in on the real deployment after the `fetch` handler fix, and Vercel's cron.
+[DEPLOY_VERCEL.md](DEPLOY_VERCEL.md) has a troubleshooting table.
 
 ---
 
@@ -79,20 +86,29 @@ export { default } from "../dist-server/server/vercel-handler.js";
 
 ### `server/vercel-handler.ts`
 
-Wraps the existing Hono app for Vercel.
+Exposes the existing Hono app to Vercel as a Web-standard `fetch` handler.
 
 ```ts
 /**
  * Vercel entry point (re-exported by api/index.js; every /api/* request is rewritten there by vercel.json).
  * On Vercel the API runs as a serverless function: Vercel serves the built SPA itself, and there is no
  * background worker, so scheduled jobs reach the app through /api/cron/* instead.
+ *
+ * This is a Web-standard `fetch` handler: Vercel builds the Request (body included) and calls fetch(request).
+ * Do not wrap the app with `@hono/node-server/vercel` instead. Vercel's Node runtime reads the request body
+ * *before* calling a Node-style (req, res) handler and only replays it through req.on("data"/"end"), which the
+ * adapter's stream bridge does not use: every POST then arrives with an empty body and sign-in answers
+ * "Invalid JSON in request body" (or hangs until the function times out).
  */
-import { handle } from "@hono/node-server/vercel";
-
 import { createApp } from "./app.js";
 
-export default handle(createApp());
+export default { fetch: createApp().fetch };
 ```
+
+> **Why not the Node adapter?** The first version of this file used `handle()` from `@hono/node-server/vercel`.
+> It passed every local check, but on a real Vercel deployment each sign-in request timed out after 30 seconds
+> (`Vercel Runtime Timeout Error` in the logs). The test that guards this is "Vercel entry point" in
+> `server/tests/vercel-and-cron.test.ts`.
 
 ### `server/routes/cron.ts`
 

@@ -204,7 +204,7 @@ These files are the ones added by [DEPLOY_VERCEL_CODE_CHANGES.md](DEPLOY_VERCEL_
 |---|---|
 | `vercel.json` | Build command, SPA fallback, `/api/*` → the function, security and cache headers |
 | `api/index.js` | The function entry; re-exports the compiled server |
-| `server/vercel-handler.ts` | Wraps the Hono app for Vercel (`@hono/node-server/vercel`) |
+| `server/vercel-handler.ts` | Exposes the Hono app to Vercel as a Web-standard `fetch` handler |
 | `server/routes/cron.ts` | `GET /api/cron/reminders`, protected by `CRON_SECRET` |
 | `scripts/vercel-migrate.mjs` | Applies migrations on Production builds |
 | `server/env.ts` | On Vercel: public address, trusted deployment address and proxy trust are derived automatically |
@@ -226,6 +226,7 @@ and redeploy. The default `*.vercel.app` address keeps working.
 | Build says "No database connection string" | The variables are not set for **Production**. |
 | `/api/health` answers `503` / `"database": "unavailable"` | `DATABASE_URL` is wrong, or lacks `sslmode=require`. Check it in Neon. |
 | Sign-in shows "تم رفض الطلب لأنه لم يصدر من واجهة التطبيق" (`CSRF_REJECTED`) | You opened the app from an address the server does not trust, typically a custom domain without `BETTER_AUTH_URL`. Set it (step 11). |
+| Sign-in shows "An error occurred with your deployment"; Vercel Logs say `Task timed out after 30 seconds` for `POST /api/auth/sign-in/email` | The function was wrapped with the Node adapter instead of exporting `{ fetch }` (see `server/vercel-handler.ts`): Vercel's Node runtime consumes POST bodies first. Fixed in the commit after "Prepare for Vercel". |
 | Sign-in works, then you are signed out at once | Session cookies are Secure-only: open the `https://` address, never `http://`. |
 | `429` at sign-in | Rate limit or account lock: wait a minute (10 wrong passwords lock an account for 15 minutes). |
 | Pages other than the home page show a Vercel 404 | `vercel.json` is missing from the deployed commit. |
