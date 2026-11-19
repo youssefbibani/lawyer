@@ -168,10 +168,15 @@ export async function previewTaskConflicts(ctx: Ctx, raw: unknown): Promise<Task
 }
 
 /** Re-derives the task's pending reminder rows from its due instant and requested channels. */
+/** Tasks with a date but no time are announced at this hour (office time zone). */
+export const DEFAULT_TASK_ALERT_TIME = "08:00";
+
 export async function syncTaskReminders(tx: Tx, ctx: Ctx, taskId: string) {
   const task = await tx.task.findUniqueOrThrow({ where: { id: taskId } });
   await tx.reminder.updateMany({ where: { taskId, organizationId: task.organizationId, status: "PENDING" }, data: { status: "CANCELLED" } });
-  if (task.status !== "OPEN" || !task.dueAt) return;
+  if (task.status !== "OPEN") return;
+  const alertAt = task.dueAt ?? (task.dueDate ? zonedToUtc(formatDateOnly(task.dueDate), DEFAULT_TASK_ALERT_TIME, ctx.actor.office.timeZone) : null);
+  if (!alertAt) return;
   const channels = [task.notifyInApp ? ("IN_APP" as const) : null, task.notifyEmail ? ("EMAIL" as const) : null].filter((c) => c !== null);
   if (!channels.length) return;
   await tx.reminder.createMany({
@@ -179,7 +184,7 @@ export async function syncTaskReminders(tx: Tx, ctx: Ctx, taskId: string) {
       organizationId: task.organizationId,
       taskId,
       recipientId: task.assigneeId,
-      scheduledAt: task.dueAt!,
+      scheduledAt: alertAt,
       channel,
       createdById: ctx.actor.userId,
     })),

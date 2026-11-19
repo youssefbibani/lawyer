@@ -18,10 +18,17 @@ beforeAll(async () => {
 afterEach(() => setMailer(notConfigured));
 
 describe("tasks", () => {
-  it("never invents a due time: date-only tasks have no instant and no reminders", async () => {
-    const res = await lawyer.post("/tasks", { title: "إيداع تقرير", assigneeId: office.lawyer.id, dueDate: today });
+  it("keeps date-only tasks without a time, and alerts at 08:00 (office time) on their day", async () => {
+    const res = await lawyer.post("/tasks", { title: "إيداع تقرير", assigneeId: office.lawyer.id, dueDate: "2031-05-06", notifyInApp: true });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ dueDate: today, dueTime: null, dueAt: null, status: "OPEN", reminders: [] });
+    expect(res.body).toMatchObject({ dueDate: "2031-05-06", dueTime: null, dueAt: null, status: "OPEN" });
+    expect(res.body.reminders).toHaveLength(1);
+    expect(res.body.reminders[0]).toMatchObject({ channel: "IN_APP", status: "PENDING", scheduledAt: "2031-05-06T07:00:00.000Z" });
+    // No alert requested, or no date: nothing is scheduled.
+    const silent = await lawyer.post("/tasks", { title: "بدون تنبيه", assigneeId: office.lawyer.id, dueDate: "2031-05-06", notifyInApp: false });
+    expect(silent.body.reminders).toEqual([]);
+    const undated = await lawyer.post("/tasks", { title: "بدون تاريخ", assigneeId: office.lawyer.id });
+    expect(undated.body.reminders).toEqual([]);
   });
 
   it("schedules one reminder per requested channel at the due instant (office time)", async () => {

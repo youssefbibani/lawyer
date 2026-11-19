@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, FileText, Plus, Search as SearchIcon } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -19,12 +19,18 @@ import { CASE_STATUS_LABELS, CASE_TYPE_LABELS, caseStatusToneOf } from "@/backen
 import { useLocalCaseBridge } from "@/backend/local-bridge";
 import type { CaseStatus } from "../../shared/api";
 
-const FILTERS: { label: string; value: CaseStatus | "ALL" }[] = [
+type Filter = CaseStatus | "ALL" | "ARCHIVE";
+
+/** «منتهية» = closed less than a month ago; after that a closed case moves to «الأرشيف». */
+const FILTERS: { label: string; value: Filter; hint?: string }[] = [
   { label: "الكل", value: "ALL" },
   { label: "نشطة", value: "ACTIVE" },
   { label: "مؤجلة", value: "POSTPONED" },
-  { label: "منتهية", value: "CLOSED" },
+  { label: "منتهية", value: "CLOSED", hint: "تنتقل إلى الأرشيف بعد شهر من ختمها" },
+  { label: "الأرشيف", value: "ARCHIVE", hint: "القضايا المنتهية منذ أكثر من شهر" },
 ];
+
+const isFilter = (v: string | null): v is Filter => !!v && FILTERS.some((f) => f.value === v);
 
 const PAGE_SIZE = 20;
 
@@ -43,14 +49,23 @@ export default function Cases() {
   const compact = useIsCompact();
   const bridge = useLocalCaseBridge();
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<CaseStatus | "ALL">("ALL");
+  const [params] = useSearchParams();
+  const initial = params.get("status");
+  const [statusFilter, setStatusFilter] = useState<Filter>(isFilter(initial) ? initial : "ALL");
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const q = useDebounced(query.trim());
 
   useEffect(() => setPage(1), [q, statusFilter]);
 
-  const cases = useCases({ q, status: statusFilter === "ALL" ? undefined : statusFilter, page, pageSize: PAGE_SIZE, sort: "updatedAt:desc" });
+  const cases = useCases({
+    q,
+    status: statusFilter === "ALL" || statusFilter === "ARCHIVE" ? undefined : statusFilter,
+    archived: statusFilter === "ARCHIVE" ? "true" : undefined,
+    page,
+    pageSize: PAGE_SIZE,
+    sort: "updatedAt:desc",
+  });
   const list = cases.data?.items ?? [];
   const total = cases.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -62,7 +77,7 @@ export default function Cases() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full sm:max-w-xs">
             <SearchIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالحريف، المرجع، المحكمة..." aria-label="بحث في القضايا" className="pr-9" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالحريف، عدد القضية، المحكمة..." aria-label="بحث في القضايا" className="pr-9" />
           </div>
           {can("case:create") && (
             <Button variant="default" className="hidden sm:inline-flex" onClick={() => setDialogOpen(true)}>
@@ -79,6 +94,7 @@ export default function Cases() {
               key={f.value}
               onClick={() => setStatusFilter(f.value)}
               aria-pressed={statusFilter === f.value}
+              title={f.hint}
               className={cn(
                 "min-h-9 rounded-sm border px-3 py-1 text-xs font-medium coarse:min-h-11 coarse:px-4 coarse:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 statusFilter === f.value ? "border-gold bg-gold/15 text-gold-deep" : "border-border text-muted-foreground hover:bg-secondary",
@@ -140,7 +156,7 @@ export default function Cases() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>المرجع</TableHead>
+                  <TableHead>عدد القضية</TableHead>
                   <TableHead>الحريف</TableHead>
                   <TableHead>النوع</TableHead>
                   <TableHead>المحكمة</TableHead>
@@ -166,7 +182,7 @@ export default function Cases() {
                     <TableCell className="font-medium">{c.clients.map((x) => x.fullName).join("، ") || "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{CASE_TYPE_LABELS[c.type]}</TableCell>
                     <TableCell className="text-muted-foreground">{c.court}</TableCell>
-                    <TableCell className="font-mono text-xs">{c.nextHearing ? `${formatArabicDate(c.nextHearing.date)} ${c.nextHearing.time}` : "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{c.nextHearing ? formatArabicDate(c.nextHearing.date) : "—"}</TableCell>
                     <TableCell className="font-mono">{docs(c.reference) ?? "—"}</TableCell>
                     <TableCell>
                       <StatusBadge label={CASE_STATUS_LABELS[c.status]} tone={caseStatusToneOf(c.status)} />

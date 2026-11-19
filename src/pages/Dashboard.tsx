@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Briefcase,
   CalendarClock,
-  Archive,
+  CalendarCheck,
   ListTodo,
   Wallet,
   Upload,
@@ -12,7 +12,7 @@ import {
   ReceiptText,
   Sparkles,
   ChevronLeft,
-  AlertTriangle,
+  SendHorizontal,
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 
@@ -27,8 +27,7 @@ import { TaskDialog } from "@/components/tasks/TaskDialog";
 import { useTaskActions } from "@/components/tasks/useTaskActions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useDB, useCurrentUser } from "@/hooks/use-db";
-import { accessibleDocuments } from "@/services/api";
+import { Textarea } from "@/components/ui/textarea";
 import { urgencyLabelOf, urgencyToneOf } from "@/lib/status";
 import { formatArabicDateShort } from "@/lib/formatters";
 import { urgencyOf } from "@/lib/dates";
@@ -37,20 +36,22 @@ import { CASE_STATUS_LABELS, CASE_TYPE_LABELS, caseStatusToneOf } from "@/backen
 import { formatMoney } from "@/backend/format";
 
 const CHART_COLORS = ["#1A1A2E", "#C9A84C", "#9B7627", "#B5402A", "#4d7a5f"];
-const SUGGESTIONS = ["شنوة الجلسات اللي عندي الأسبوع الجاي؟", "ورّيني الأتعاب اللي مازالت ما تخلّصتش", "فتّشلي على حكم قديم في نزاع ميراث"];
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const dashboard = useDashboard();
-  // The archive (documents) module still runs on the local demo store; its metric is unchanged.
-  const db = useDB();
-  const demoUser = useCurrentUser();
-  const documentCount = useMemo(() => accessibleDocuments(db, demoUser).length, [db, demoUser]);
   const taskActions = useTaskActions();
+  const [prompt, setPrompt] = useState("");
   const d = dashboard.data;
 
   const distribution = useMemo(() => (d?.caseTypeDistribution ?? []).map((x) => ({ name: CASE_TYPE_LABELS[x.type], value: x.count })), [d]);
   const outstanding = d?.outstanding;
+
+  function askAssistant(e?: React.SyntheticEvent) {
+    e?.preventDefault();
+    const text = prompt.trim();
+    navigate(text ? `/app/assistant?prompt=${encodeURIComponent(text)}` : "/app/assistant");
+  }
 
   return (
     <AppShell title="لوحة التحكم" subtitle="نظرة شاملة على نشاط المكتب">
@@ -67,19 +68,21 @@ export default function Dashboard() {
         d && (
           <div className="space-y-6 sm:space-y-8">
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
-              <MetricCard icon={Briefcase} value={String(d.activeCases)} label="قضية نشطة" />
-              <MetricCard icon={CalendarClock} value={String(d.hearingsNext7Days.length)} label="جلسات خلال 7 أيام" />
+              <MetricCard icon={Briefcase} value={String(d.activeCases)} label="القضايا المنشورة" to="/app/cases?status=ACTIVE" />
+              <MetricCard icon={CalendarClock} value={String(d.hearingsNext7Days.length)} label="جلسات خلال الأسبوع" to="/app/agenda" />
               <MetricCard
                 icon={ListTodo}
                 value={String(d.todayTasks.length)}
-                label="مهام اليوم"
-                hint={d.overdueTaskCount ? `${d.overdueTaskCount} مهام متأخرة` : undefined}
+                label="أعمال اليوم"
+                hint={d.overdueTaskCount ? `${d.overdueTaskCount} أعمال متأخرة` : undefined}
                 tone={d.overdueTaskCount ? "alert" : "default"}
+                to="/app/tasks"
               />
-              <MetricCard icon={Archive} value={String(documentCount)} label="وثيقة متاحة" />
+              <MetricCard icon={CalendarCheck} value={String(d.upcomingAppointments)} label="مواعيد الحرفاء" to="/app/appointments" />
               {outstanding && (
                 <div className="col-span-2 lg:col-span-1">
                   <MetricCard
+                    to="/app/payments"
                     icon={Wallet}
                     value={outstanding.length ? outstanding.map((o) => formatMoney(o.amount, o.currency)).join(" + ") : formatMoney("0")}
                     label="مستحقات غير مدفوعة"
@@ -89,23 +92,12 @@ export default function Dashboard() {
               )}
             </div>
 
-            {d.conflictGroups.length > 0 && (
-              <Link
-                to="/app/agenda"
-                className="flex items-center gap-3 rounded-[var(--radius)] border border-alert/30 bg-alert/10 p-4 text-sm text-alert focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <AlertTriangle className="h-5 w-5 shrink-0" />
-                <span className="min-w-0 flex-1">يوجد {d.conflictGroups.length === 1 ? "تعارض واحد" : `${d.conflictGroups.length} تعارضات`} في الجلسات القادمة — مراجعة المفكرة</span>
-                <ChevronLeft className="h-5 w-5 shrink-0" />
-              </Link>
-            )}
-
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <Card className="lg:col-span-2">
                 <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
                   <div>
-                    <CardTitle>مهام اليوم</CardTitle>
-                    <CardDescription>{d.overdueTaskCount ? `${d.overdueTaskCount} مهام متأخرة تحتاج متابعة` : "لا توجد مهام متأخرة"}</CardDescription>
+                    <CardTitle>أعمال اليوم</CardTitle>
+                    <CardDescription>{d.overdueTaskCount ? `${d.overdueTaskCount} أعمال متأخرة تحتاج متابعة` : "لا توجد أعمال متأخرة"}</CardDescription>
                   </div>
                   <Button variant="ghost" size="sm" asChild>
                     <Link to="/app/tasks">
@@ -116,18 +108,18 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   {d.todayTasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">لا توجد مهام مبرمجة لليوم.</p>
+                    <p className="text-sm text-muted-foreground">لا توجد أعمال مبرمجة لليوم.</p>
                   ) : (
                     <ul className="space-y-2">
                       {d.todayTasks.slice(0, 4).map((t) => (
-                        <TaskItem key={t.id} task={t} onToggle={taskActions.toggle} onEdit={taskActions.openEdit} onDelete={taskActions.setDeleting} />
+                        <TaskItem key={t.id} task={t} finishing={taskActions.isFinishing(t.id)} onToggle={taskActions.toggle} onEdit={taskActions.openEdit} onDelete={taskActions.setDeleting} />
                       ))}
                     </ul>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="border-gold/40 bg-night text-cream dark:bg-card">
+              <Card className="flex min-h-[22rem] flex-col border-gold/40 bg-night text-cream dark:bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-cream">
                     <Sparkles className="h-5 w-5 text-gold" aria-hidden="true" />
@@ -135,20 +127,23 @@ export default function Dashboard() {
                   </CardTitle>
                   <CardDescription className="text-cream/70">اسأل بالدارجة أو بالفصحى عن ملفاتك ومواعيدك.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  {SUGGESTIONS.map((s) => (
-                    <Link
-                      key={s}
-                      to={`/app/assistant?prompt=${encodeURIComponent(s)}`}
-                      className="flex min-h-11 items-center justify-between gap-2 rounded-[var(--radius)] border border-cream/15 px-3 py-2 text-sm text-cream/90 transition-colors hover:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                      <span className="min-w-0">{s}</span>
-                      <ChevronLeft className="h-4 w-4 shrink-0 text-gold" />
-                    </Link>
-                  ))}
-                  <Button variant="gold" className="mt-2 w-full" onClick={() => navigate("/app/assistant")}>
-                    فتح المساعد
-                  </Button>
+                <CardContent className="flex flex-1 flex-col">
+                  <form onSubmit={askAssistant} className="flex flex-1 flex-col gap-3">
+                    <Textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) askAssistant(e);
+                      }}
+                      placeholder="اكتب سؤالك هنا..."
+                      aria-label="سؤال للمساعد"
+                      className="min-h-28 flex-1 resize-none border-cream/20 bg-cream/5 text-cream placeholder:text-cream/50 focus-visible:ring-gold"
+                    />
+                    <Button type="submit" variant="gold" className="w-full">
+                      <SendHorizontal className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+                      {prompt.trim() ? "إرسال إلى المساعد" : "فتح المساعد"}
+                    </Button>
+                  </form>
                 </CardContent>
               </Card>
             </div>
@@ -157,7 +152,7 @@ export default function Dashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle>جلسات الأيام السبعة القادمة</CardTitle>
-                  <CardDescription>المواعيد القادمة مرتبة حسب التاريخ (بتوقيت تونس)</CardDescription>
+                  <CardDescription>الجلسات القادمة مرتبة حسب التاريخ</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {d.hearingsNext7Days.length === 0 && <p className="text-sm text-muted-foreground">لا توجد جلسات خلال الأسبوع.</p>}
@@ -177,7 +172,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span>{h.room}</span>
                           <span className="font-mono" dir="ltr">
-                            {formatArabicDateShort(h.date)} — {h.time}
+                            {formatArabicDateShort(h.date)}
                           </span>
                         </div>
                       </Link>
@@ -212,26 +207,28 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
+              <Card className="flex flex-col lg:col-span-2">
                 <CardHeader>
                   <CardTitle>إجراءات سريعة</CardTitle>
                   <CardDescription>وصول مباشر إلى المهام الأكثر استخداماً</CardDescription>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {/* The tiles stretch to fill the whole card, whatever the height of the chart beside it. */}
+                <CardContent className="grid flex-1 auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3">
                   {[
                     { label: "رفع وثيقة", icon: Upload, to: "/app/archive" },
                     { label: "بحث في الأرشيف", icon: Search, to: "/app/search" },
                     { label: "إضافة جلسة", icon: CalendarPlus, to: "/app/agenda" },
                     { label: "تسجيل دفعة", icon: ReceiptText, to: "/app/payments" },
+                    { label: "موعد جديد", icon: CalendarCheck, to: "/app/appointments?new=1" },
                   ].map((a) => (
-                    <Button key={a.label} variant="outline" className="h-auto min-h-20 flex-col gap-2 whitespace-normal py-4 text-center" onClick={() => navigate(a.to)}>
+                    <Button key={a.label} variant="outline" className="h-full min-h-20 flex-col gap-2 whitespace-normal py-4 text-center" onClick={() => navigate(a.to)}>
                       <a.icon className="h-5 w-5 text-gold-deep" />
                       {a.label}
                     </Button>
                   ))}
-                  <Button variant="outline" className="h-auto min-h-20 flex-col gap-2 whitespace-normal py-4 text-center" onClick={taskActions.openNew}>
+                  <Button variant="outline" className="h-full min-h-20 flex-col gap-2 whitespace-normal py-4 text-center" onClick={taskActions.openNew}>
                     <ListTodo className="h-5 w-5 text-gold-deep" />
-                    مهمة جديدة
+                    عمل مطلوب جديد
                   </Button>
                 </CardContent>
               </Card>

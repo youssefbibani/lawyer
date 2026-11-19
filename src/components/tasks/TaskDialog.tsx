@@ -166,7 +166,7 @@ export function TaskDialog({ open, onOpenChange, task, defaults, onSaved }: Task
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{task ? "تعديل المهمة" : "مهمة أو تذكير جديد"}</DialogTitle>
+          <DialogTitle>{task ? "تعديل العمل المطلوب" : "عمل مطلوب جديد"}</DialogTitle>
           <DialogDescription>تُربط المهام بالقضية ويُحدَّث سجلها الزمني تلقائياً.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
@@ -233,18 +233,12 @@ export function TaskDialog({ open, onOpenChange, task, defaults, onSaved }: Task
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* No time field: alerts go out at 08:00 on the chosen day (an older task keeps the time it had). */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="task-date">التاريخ</Label>
               <Input id="task-date" type="date" value={values.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="task-time">الساعة (اختياري)</Label>
-              <Input id="task-time" type="time" value={values.dueTime} onChange={(e) => set("dueTime", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>الأولوية</Label>
               <Select value={values.priority} onValueChange={(v) => set("priority", v as UiPriority)}>
@@ -282,7 +276,7 @@ export function TaskDialog({ open, onOpenChange, task, defaults, onSaved }: Task
             <div className="flex min-h-11 items-center justify-between gap-3">
               <Label htmlFor="ch-app" className="font-normal">
                 داخل التطبيق
-                <span className="block text-xs text-muted-foreground">يرسله الخادم عند حلول الموعد ويظهر في الإشعارات (يتطلب تحديد الساعة).</span>
+                <span className="block text-xs text-muted-foreground">يظهر في الإشعارات على الساعة 08:00 من يوم العمل المطلوب.</span>
               </Label>
               <Switch id="ch-app" checked={values.notifyInApp} onCheckedChange={(v) => set("notifyInApp", v)} />
             </div>

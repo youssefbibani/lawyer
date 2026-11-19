@@ -29,7 +29,7 @@ const DOT_TONE: Record<Urgency, string> = {
 };
 
 const LEGEND: { label: string; hint: string; dot: string }[] = [
-  { label: "عاجل", hint: "أقل من 48 ساعة", dot: "bg-alert" },
+  { label: "أكيد", hint: "أقل من 48 ساعة", dot: "bg-alert" },
   { label: "هذا الأسبوع", hint: "خلال 7 أيام", dot: "bg-gold" },
   { label: "لاحقاً", hint: "بعد أكثر من أسبوع", dot: "bg-muted-foreground" },
 ];
@@ -169,8 +169,8 @@ export function MonthCalendar({ month, onMonthChange, hearings, selectedDate, on
                         <Link
                           key={h.id}
                           to={`/app/cases/${h.caseId}`}
-                          title={`${h.type} — ${h.clientName} — ${h.time} — ${h.caseReference} — ${urgencyLabelOf(urgencyOf(h.date))}`}
-                          aria-label={`${h.type} — ${h.clientName} — الساعة ${h.time} — ${h.caseReference} — ${urgencyLabelOf(urgencyOf(h.date))}`}
+                          title={`${h.type} — ${h.clientName} — ${h.caseReference} — ${urgencyLabelOf(urgencyOf(h.date))}`}
+                          aria-label={`${h.type} — ${h.clientName} — ${h.caseReference} — ${urgencyLabelOf(urgencyOf(h.date))}`}
                           className={cn(
                             "relative z-10 hidden flex-wrap items-center justify-center gap-x-1 rounded-sm border px-1 py-0.5 font-mono text-[11px] leading-4 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex [&>span]:whitespace-nowrap",
                             CHIP_TONE[urgencyOf(h.date)],
@@ -178,10 +178,6 @@ export function MonthCalendar({ month, onMonthChange, hearings, selectedDate, on
                           dir="ltr"
                         >
                           <span>{shortReference(h.caseReference)}</span>
-                          <span className="hearing-chip-sep" aria-hidden="true">
-                            —
-                          </span>
-                          <span>{h.time}</span>
                         </Link>
                       ))}
 

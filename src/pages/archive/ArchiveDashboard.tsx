@@ -40,6 +40,8 @@ export default function ArchiveDashboard() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [responsible, setResponsible] = useState("all");
+  /** Set by clicking a number card: only boxes holding documents in that state. */
+  const [bucket, setBucket] = useState<string | null>(null);
   const batches = useMemo(() => accessibleBatches(db), [db]);
   const allItems = useMemo(() => db.archiveItems.filter((i) => i.tenantId === db.tenantId), [db]);
   const store = getBlobStore();
@@ -49,6 +51,7 @@ export default function ArchiveDashboard() {
     (b) =>
       (status === "all" || b.status === status) &&
       (responsible === "all" || b.responsibleId === responsible) &&
+      (!bucket || bucketCounts(allItems.filter((i) => i.batchId === b.id)).some((c) => c.key === bucket && c.count > 0)) &&
       (!query.trim() || normalizeText(`${b.name} ${b.reference} ${b.location}`).includes(normalizeText(query))),
   );
 
@@ -63,20 +66,28 @@ export default function ArchiveDashboard() {
   const totals = bucketCounts(allItems);
 
   return (
-    <AppShell title="الأرشفة الذكية" subtitle="رقمنة الوثائق الورقية ومتابعة دفعات الأرشفة">
+    <AppShell title="الأرشفة الذكية" subtitle="رقمنة الوثائق الورقية ومتابعة علب الأرشفة">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">رفع ← استخراج ← تصنيف ← مراجعة ← ربط ← موافقة ← حفظ نهائي</p>
           <Button onClick={() => navigate("/app/archive/new")} className="w-full sm:w-auto">
             <FolderPlus className="h-4 w-4" />
-            إنشاء دفعة أرشفة
+            إنشاء علبة أرشفة
           </Button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 2xl:grid-cols-6">
-          <MetricCard icon={FileStack} value={String(allItems.length)} label="إجمالي الوثائق" />
+          <MetricCard icon={FileStack} value={String(allItems.length)} label="إجمالي الوثائق" active={bucket === null} onClick={() => setBucket(null)} />
           {totals.map((b, i) => (
-            <MetricCard key={b.key} icon={ICONS[i]} value={String(b.count)} label={b.label} tone={b.key === "correction" && b.count ? "alert" : b.key === "ready" && b.count ? "gold" : "default"} />
+            <MetricCard
+              key={b.key}
+              icon={ICONS[i]}
+              value={String(b.count)}
+              label={b.label}
+              tone={b.key === "correction" && b.count ? "alert" : b.key === "ready" && b.count ? "gold" : "default"}
+              active={bucket === b.key}
+              onClick={() => setBucket((cur) => (cur === b.key ? null : b.key))}
+            />
           ))}
         </div>
 
@@ -96,9 +107,9 @@ export default function ArchiveDashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم أو المرجع أو المكان..." aria-label="بحث في الدفعات" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="بحث بالاسم أو المرجع أو المكان..." aria-label="بحث في العلب" />
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger aria-label="حالة الدفعة">
+            <SelectTrigger aria-label="حالة العلبة">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -126,7 +137,7 @@ export default function ArchiveDashboard() {
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState icon={Archive} title="لا توجد دفعات" description="أنشئ دفعة أرشفة لبدء رقمنة علبة أو ملف ورقي." />
+          <EmptyState icon={Archive} title="لا توجد علب" description="أنشئ علبة أرشفة لبدء رقمنة وثائق علبة ورقية أو ملف." />
         ) : (
           <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {filtered.map((b) => {
@@ -158,7 +169,7 @@ export default function ArchiveDashboard() {
                       </span>
                       <span className="font-mono">{pct}%</span>
                     </div>
-                    <Progress value={pct} aria-label={`تقدم الدفعة ${b.name}`} />
+                    <Progress value={pct} aria-label={`تقدم العلبة ${b.name}`} />
                   </div>
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
                     {counts.filter((c) => c.count).map((c) => (

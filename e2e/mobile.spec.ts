@@ -13,7 +13,7 @@ test.describe("mobile (phone viewport)", () => {
   test("dashboard fits the screen and shows the bottom navigation", async ({ page }) => {
     await page.goto("/app");
     await expect(page.getByRole("heading", { name: "لوحة التحكم" })).toBeVisible();
-    await expect(page.getByText("قضية نشطة")).toBeVisible();
+    await expect(page.getByText("القضايا المنشورة")).toBeVisible();
     await expect(page.getByRole("navigation", { name: "التنقل السريع" })).toBeVisible();
     await noHorizontalOverflow(page);
   });

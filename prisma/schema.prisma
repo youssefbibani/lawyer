@@ -23,14 +23,14 @@ datasource db {
 // ————————————————————————————————————————————————————————————————————————
 
 model User {
-  id               String    @id
+  id               String   @id
   name             String
-  email            String    @unique
-  emailVerified    Boolean   @default(false)
+  email            String   @unique
+  emailVerified    Boolean  @default(false)
   image            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @default(now()) @updatedAt
-  twoFactorEnabled Boolean?  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+  twoFactorEnabled Boolean? @default(false)
 
   sessions    Session[]
   accounts    Account[]
@@ -54,6 +54,7 @@ model User {
   tasksCancelled      Task[]         @relation("TaskCancelledBy")
   remindersCreated    Reminder[]     @relation("ReminderCreatedBy")
   auditEntries        AuditLog[]     @relation("AuditActor")
+  appointmentsCreated Appointment[]  @relation("AppointmentCreatedBy")
 
   @@map("users")
 }
@@ -280,6 +281,7 @@ model Client {
   cases         CaseClient[]
   feeAgreements FeeAgreement[]
   receipts      Receipt[]
+  appointments  Appointment[]
 
   @@unique([id, organizationId])
   @@index([organizationId, fullName])
@@ -625,6 +627,36 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum AppointmentStatus {
+  SCHEDULED
+  DONE
+  CANCELLED
+}
+
+/// A meeting with a client at the office («مواعيد الحرفاء»). Separate from court hearings.
+model Appointment {
+  id             String            @id @default(cuid())
+  organizationId String
+  clientId       String
+  client         Client            @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  date           DateTime          @db.Date
+  /// Optional wall-clock time ("HH:MM", office time zone).
+  time           String?
+  subject        String
+  notes          String?
+  status         AppointmentStatus @default(SCHEDULED)
+  version        Int               @default(1)
+  createdById    String
+  createdBy      User              @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([id, organizationId])
+  @@index([organizationId, date])
+  @@index([clientId])
+  @@map("appointments")
+}
+
 enum TaskKind {
   TASK
   REMINDER
@@ -657,22 +689,22 @@ model Task {
   cancelledById  String?
   cancelledBy    User?          @relation("TaskCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
   assigneeId     String
-  assignee       Member       @relation("TaskAssignee", fields: [organizationId, assigneeId], references: [organizationId, userId], onDelete: Restrict)
+  assignee       Member         @relation("TaskAssignee", fields: [organizationId, assigneeId], references: [organizationId, userId], onDelete: Restrict)
   /// Calendar due date. A due time is optional and never invented when absent.
-  dueDate        DateTime?    @db.Date
+  dueDate        DateTime?      @db.Date
   dueTime        String?
   /// Exact instant, only when a due time was given (computed in the office time zone).
-  dueAt          DateTime?    @db.Timestamptz(3)
-  priority       TaskPriority @default(MEDIUM)
-  status         TaskStatus   @default(OPEN)
+  dueAt          DateTime?      @db.Timestamptz(3)
+  priority       TaskPriority   @default(MEDIUM)
+  status         TaskStatus     @default(OPEN)
   completedAt    DateTime?
   completedById  String?
-  completedBy    User?        @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
-  version        Int          @default(1)
+  completedBy    User?          @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+  version        Int            @default(1)
   createdById    String
-  createdBy      User         @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdBy      User           @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   reminders Reminder[]
 

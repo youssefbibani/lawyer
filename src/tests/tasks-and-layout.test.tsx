@@ -108,7 +108,9 @@ describe("navigation & permissions", () => {
     const user = userEvent.setup();
     await user.click(within(nav).getByRole("button", { name: "المزيد" }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByRole("link", { name: /المهام والتذكيرات/ })).toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: /الأعمال المطلوبة/ })).toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: /مواعيد الحرفاء/ })).toBeInTheDocument();
+    expect(within(sheet).queryByRole("link", { name: /طلبات الموافقة/ })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: /الأتعاب/ })).toBeInTheDocument();
   });
 
@@ -122,8 +124,14 @@ describe("navigation & permissions", () => {
     mockApi({ "GET /api/v1/me": () => meFixture(), "GET /api/v1/dashboard": () => dashboardFixture(toISODate(new Date())) });
     renderAt("/app", [{ path: "/app", element: <Dashboard /> }]);
     expect(screen.getByRole("heading", { name: "لوحة التحكم" })).toBeInTheDocument();
-    expect(await screen.findByText("مهام اليوم", { selector: "h3" })).toBeInTheDocument();
+    expect(await screen.findByText("أعمال اليوم", { selector: "h3" })).toBeInTheDocument();
     expect(screen.getByText("11,500 د.ت")).toBeInTheDocument();
+    // The number cards are links to their pages.
+    expect(screen.getByRole("link", { name: /القضايا المنشورة/ })).toHaveAttribute("href", "/app/cases?status=ACTIVE");
+    expect(screen.getByRole("link", { name: /جلسات خلال الأسبوع/ })).toHaveAttribute("href", "/app/agenda");
+    expect(screen.getByRole("link", { name: /مواعيد الحرفاء/ })).toHaveAttribute("href", "/app/appointments");
+    // The assistant card has a prompt bar instead of suggestions.
+    expect(screen.getByRole("textbox", { name: "سؤال للمساعد" })).toBeInTheDocument();
     // No visible Latin UI words (technical refs like CC/… or د.ت are allowed).
     const visible = document.body.textContent ?? "";
     const latinWords = visible.replace(/CC\/\d{4}\/\d{4}|Ctrl K|SMS|PDF|OCR|FR|[A-Z]{2,3}-\d{4}-\d{4}/g, "").match(/[A-Za-z]{3,}/g) ?? [];

@@ -7,20 +7,23 @@ import { hearingFixture, meFixture, mockApi, page, renderAt } from "./api-mock";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Agenda page", () => {
-  it("shows a conflict alert for hearings of the same lawyer at the same date and time", async () => {
+  it("lists two hearings on the same day without a clash alert, with visible options and no time", async () => {
     const h1 = hearingFixture("h1", "c3", "CC/2024/0512", "الهادي الطرابلسي", "2031-03-03", "09:00");
     const h2 = hearingFixture("h2", "c4", "CC/2025/0842", "شركة المتوسط للتجارة", "2031-03-03", "09:00", { type: "جلسة استماع" });
     mockApi({
       "GET /api/v1/me": () => meFixture(),
       "GET /api/v1/hearings": () => page([h1, h2]),
-      "GET /api/v1/hearings/conflict-groups": () => [[h1, h2]],
     });
     renderAt("/app/agenda", [{ path: "/app/agenda", element: <Agenda /> }]);
 
-    const alert = await screen.findByRole("alert");
-    expect(within(alert).getByText("تنبيه: يوجد تعارض بين جلستين للمحامي نفسه")).toBeInTheDocument();
-    expect(alert.textContent).toContain("CC/2024/0512");
-    expect(alert.textContent).toContain("CC/2025/0842");
+    expect(await screen.findByText("شركة المتوسط للتجارة")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // Hearing options are buttons on the card, not a hidden menu.
+    const options = screen.getByRole("group", { name: "إجراءات الجلسة: جلسة استماع" });
+    for (const name of ["انعقدت", "تأجيل", "تعديل", "السجل"]) expect(within(options).getByRole("button", { name: new RegExp(name) })).toBeInTheDocument();
+    // No reminder-channel settings box, no time shown.
+    expect(screen.queryByText("تذكير ذكي")).not.toBeInTheDocument();
+    expect(screen.queryByText("09:00")).not.toBeInTheDocument();
   });
 
   it("reports a server failure instead of showing an empty agenda", async () => {

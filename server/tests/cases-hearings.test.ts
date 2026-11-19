@@ -99,43 +99,31 @@ describe("cases", () => {
 });
 
 describe("hearings", () => {
-  it("requires an explicit time and stores the instant in UTC", async () => {
+  it("takes a date only (default time 09:00) and still accepts an explicit time, stored in UTC", async () => {
     const c = await createCaseFor(office);
-    const noTime = await lawyer.post("/hearings", { caseId: c.id, date: "2031-02-03", court: "محكمة", type: "جلسة" });
-    expect(noTime.status).toBe(422);
-    expect(noTime.body.error.details.map((d: { path: string }) => d.path)).toContain("time");
+    const dateOnly = await lawyer.post("/hearings", { caseId: c.id, date: "2031-02-03", court: "محكمة", type: "جلسة" });
+    expect(dateOnly.status).toBe(201);
+    expect(dateOnly.body).toMatchObject({ date: "2031-02-03", time: "09:00", startsAt: "2031-02-03T08:00:00.000Z" });
     const h = await lawyer.post("/hearings", { caseId: c.id, date: "2031-02-03", time: "09:30", court: "محكمة", room: "قاعة 2", type: "جلسة" });
     expect(h.status).toBe(201);
     expect(h.body).toMatchObject({ date: "2031-02-03", time: "09:30", timeZone: "Africa/Tunis", startsAt: "2031-02-03T08:30:00.000Z" });
   });
 
-  it("warns about overlapping hearings of the same lawyer, and saves only when acknowledged", async () => {
+  it("allows several hearings of the same lawyer on the same day: clash checks are off", async () => {
     const c1 = await createCaseFor(office);
     const c2 = await createCaseFor(office);
-    const base = { date: "2031-04-07", court: "محكمة", type: "جلسة", durationMinutes: 60 };
-    expect((await lawyer.post("/hearings", { ...base, caseId: c1.id, time: "10:00" })).status).toBe(201);
-    const preview = await lawyer.get(`/hearings/conflicts?caseId=${c2.id}&date=2031-04-07&time=10:30`);
-    expect(preview.body.hearings).toHaveLength(1);
-    const clash = await lawyer.post("/hearings", { ...base, caseId: c2.id, time: "10:30" });
-    expect(clash.status).toBe(409);
-    expect(clash.body.error.code).toBe("HEARING_CONFLICT");
-    expect(clash.body.error.data.hearings[0].caseId).toBe(c1.id);
-    expect((await lawyer.post("/hearings", { ...base, caseId: c2.id, time: "11:00" })).status).toBe(201);
-    expect((await lawyer.post("/hearings", { ...base, caseId: c2.id, time: "10:30", acknowledgeConflicts: true })).status).toBe(201);
-    const groups = await lawyer.get("/hearings/conflict-groups");
-    expect(groups.body.some((g: { caseId: string }[]) => g.some((h) => h.caseId === c2.id))).toBe(true);
+    const base = { date: "2031-04-07", court: "محكمة", type: "جلسة" };
+    expect((await lawyer.post("/hearings", { ...base, caseId: c1.id })).status).toBe(201);
+    expect((await lawyer.post("/hearings", { ...base, caseId: c2.id })).status).toBe(201);
+    expect((await lawyer.get(`/hearings/conflicts?caseId=${c2.id}&date=2031-04-07`)).body).toEqual({ hearings: [], hiddenCount: 0 });
+    expect((await lawyer.get("/hearings/conflict-groups")).body).toEqual([]);
   });
 
-  it("withholds details of conflicting hearings in files the user cannot see", async () => {
+  it("still hides the conflicts preview of a file the user cannot see", async () => {
     const tmp = await createTestOffice({ lawyersSeeAllCases: false, clerksSeeAllCases: false });
     const secret = await createCaseFor(tmp, { memberIds: [] });
-    const visible = await createCaseFor(tmp);
-    const lawyerT = as(await login(tmp.lawyer.email));
-    await lawyerT.post("/hearings", { caseId: secret.id, date: "2031-06-02", time: "09:00", court: "c", type: "t" });
     const clerk = as(await login(tmp.clerk.email));
-    const preview = await clerk.get(`/hearings/conflicts?caseId=${visible.id}&date=2031-06-02&time=09:15`);
-    expect(preview.body).toEqual({ hearings: [], hiddenCount: 1 });
-    expect(JSON.stringify(preview.body)).not.toContain(secret.reference);
+    expect((await clerk.get(`/hearings/conflicts?caseId=${secret.id}`)).status).toBe(404);
   });
 
   it("keeps a history of rescheduling and cancels reminders tied to the old time", async () => {
@@ -157,10 +145,10 @@ describe("hearings", () => {
     const c = await createCaseFor(office);
     const h = (await lawyer.post("/hearings", { caseId: c.id, date: "2031-10-06", time: "09:00", court: "محكمة", type: "جلسة مرافعة" })).body;
     expect((await lawyer.post(`/hearings/${h.id}/status`, { status: "CANCELLED", version: h.version })).status).toBe(422);
-    const postponed = await lawyer.post(`/hearings/${h.id}/status`, { status: "POSTPONED", reason: "تأجيل من المحكمة", next: { date: "2031-11-03", time: "10:00" }, version: h.version });
+    const postponed = await lawyer.post(`/hearings/${h.id}/status`, { status: "POSTPONED", reason: "تأجيل من المحكمة", next: { date: "2031-11-03" }, version: h.version });
     expect(postponed.status).toBe(200);
     expect(postponed.body.hearing.status).toBe("POSTPONED");
-    expect(postponed.body.next).toMatchObject({ date: "2031-11-03", time: "10:00", status: "SCHEDULED", type: "جلسة مرافعة" });
+    expect(postponed.body.next).toMatchObject({ date: "2031-11-03", time: "09:00", status: "SCHEDULED", type: "جلسة مرافعة" });
     expect((await lawyer.patch(`/hearings/${h.id}`, { room: "x", version: postponed.body.hearing.version })).status).toBe(409);
   });
 

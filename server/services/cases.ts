@@ -14,15 +14,15 @@ import {
 import { prisma, type Tx } from "../db.js";
 import type { Ctx } from "../http/context.js";
 import { AppError, notFound, versionConflict } from "../http/errors.js";
-import { id, isoDate, optionalText, pageArgs, pagination, parse, requiredText, sortParam, version } from "../http/validation.js";
+import { boolParam, id, isoDate, optionalText, pageArgs, pagination, parse, requiredText, sortParam, version } from "../http/validation.js";
 import { normalizeSearch, searchText } from "../lib/text.js";
-import { dateOnly, todayIn } from "../lib/time.js";
+import { addDaysToDate, dateOnly, todayIn } from "../lib/time.js";
 import { audit } from "./audit.js";
 import { assertCan, can, caseScope, loadAccessibleCase, loadActiveMember } from "./authorization.js";
 import { clientFields } from "./clients.js";
 import { caseSummaryDTO, caseSummaryInclude, memberRole } from "./dto.js";
 
-const reference = requiredText(60, "يرجى إدخال مرجع القضية").refine((v) => /^[\p{L}\p{N}][\p{L}\p{N} /._-]*$/u.test(v), "مرجع القضية يحتوي على رموز غير مسموح بها");
+const reference = requiredText(60, "يرجى إدخال عدد القضية").refine((v) => /^[\p{L}\p{N}][\p{L}\p{N} /._-]*$/u.test(v), "عدد القضية يحتوي على رموز غير مسموح بها");
 
 const createBody = z
   .object({
@@ -40,9 +40,23 @@ const createBody = z
   })
   .refine((v) => (v.clientIds?.length ?? 0) > 0 || !!v.newClient, { message: "يرجى اختيار الحريف أو إدخال حريف جديد", path: ["clientIds"] });
 
+/** A closed case moves to the archive this many days after its closing date. */
+export const ARCHIVE_AFTER_DAYS = 30;
+
+/** Closed cases whose closing date is more than ARCHIVE_AFTER_DAYS ago («الأرشيف»), or the complement. */
+function archiveFilter(tz: string, archived: boolean): Prisma.CaseWhereInput {
+  const cutoff = dateOnly(addDaysToDate(todayIn(tz), -ARCHIVE_AFTER_DAYS));
+  return archived
+    ? { status: "CLOSED", closedOn: { lt: cutoff } }
+    : // Spelled out (not NOT{...}) so a closed case without a closing date is never lost to SQL NULL logic.
+      { OR: [{ status: { not: "CLOSED" } }, { closedOn: null }, { closedOn: { gte: cutoff } }] };
+}
+
 const listQuery = pagination.extend({
   q: z.string().trim().max(100).optional(),
   status: z.enum(CASE_STATUSES).optional(),
+  /** true: only the archive; otherwise archived cases are left out. */
+  archived: boolParam,
   type: z.enum(CASE_TYPES).optional(),
   lawyerId: id.optional(),
   clientId: id.optional(),
@@ -64,6 +78,7 @@ export async function listCases(ctx: Ctx, raw: unknown): Promise<Paginated<CaseS
     AND: [
       caseScope(ctx.actor),
       { archivedAt: null },
+      archiveFilter(ctx.actor.office.timeZone, !!q.archived),
       q.status ? { status: q.status } : {},
       q.type ? { type: q.type } : {},
       q.lawyerId ? { assignedLawyerId: q.lawyerId } : {},
@@ -123,7 +138,7 @@ export async function createCase(ctx: Ctx, raw: unknown): Promise<CaseDetailDTO>
     caseId = await prisma.$transaction(async (tx) => {
       await loadActiveMember(tx, ctx.actor, input.assignedLawyerId, ["lawyer", "admin"]);
       const exists = await tx.case.findUnique({ where: { organizationId_reference: { organizationId: ctx.actor.organizationId, reference: input.reference } }, select: { id: true } });
-      if (exists) throw new AppError("CONFLICT", "يوجد ملف مسجّل بنفس المرجع في مكتبك.");
+      if (exists) throw new AppError("CONFLICT", "يوجد ملف مسجّل بنفس عدد القضية في مكتبك.");
 
       const clientIds = [...new Set(input.clientIds ?? [])];
       if (clientIds.length) {
@@ -182,7 +197,7 @@ export async function createCase(ctx: Ctx, raw: unknown): Promise<CaseDetailDTO>
       return created.id;
     });
   } catch (err) {
-    if (duplicateReference(err)) throw new AppError("CONFLICT", "يوجد ملف مسجّل بنفس المرجع في مكتبك.");
+    if (duplicateReference(err)) throw new AppError("CONFLICT", "يوجد ملف مسجّل بنفس عدد القضية في مكتبك.");
     throw err;
   }
   return getCase(ctx, caseId);
@@ -217,7 +232,7 @@ async function versionedCaseUpdate(
       await audit(tx, ctx, { resourceType: "case", resourceId: caseId, caseId, operation: change.operation, summary: change.summary, before: change.before, after: change.after });
     });
   } catch (err) {
-    if (duplicateReference(err)) throw new AppError("CONFLICT", "يوجد ملف مسجّل بنفس المرجع في مكتبك.");
+    if (duplicateReference(err)) throw new AppError("CONFLICT", "يوجد ملف مسجّل بنفس عدد القضية في مكتبك.");
     throw err;
   }
   return getCase(ctx, caseId);

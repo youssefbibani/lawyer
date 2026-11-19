@@ -11,7 +11,7 @@ test.describe("lawyer workflows (real server and database)", () => {
     await page.getByRole("button", { name: "قضية جديدة" }).first().click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("اسم الحريف").fill("ورثة التجربة الآلية");
-    await dialog.getByLabel("مرجع القضية").fill(`E2E/${a.tag}/2`);
+    await dialog.getByLabel("عدد القضية").fill(`E2E/${a.tag}/2`);
     await dialog.getByRole("combobox", { name: "نوع القضية" }).click();
     await page.getByRole("option", { name: "نزاع ميراث" }).click();
     await dialog.getByLabel("المحكمة").fill("محكمة الاستئناف بتونس");
@@ -20,34 +20,28 @@ test.describe("lawyer workflows (real server and database)", () => {
     await expect(page.getByRole("heading", { name: "ورثة التجربة الآلية" })).toBeVisible();
   });
 
-  test("schedules hearings and warns about a clash for the same lawyer", async ({ page }) => {
+  test("schedules two hearings of the same lawyer on the same day, by date only", async ({ page }) => {
     const a = accounts();
     await page.goto(`/app/cases/${a.caseId}`);
     await page.getByRole("tab", { name: "الجلسات" }).click();
     await page.getByRole("button", { name: "تحديد جلسة" }).last().click();
     let dialog = page.getByRole("dialog");
-    await dialog.getByLabel("نوع الجلسة").fill("جلسة مرافعة");
+    await dialog.getByLabel("موضوع الجلسة").fill("جلسة مرافعة");
     await dialog.getByLabel("التاريخ").fill("2031-05-12");
-    await dialog.getByLabel("الوقت").fill("10:00");
     await dialog.getByRole("button", { name: "حفظ الجلسة" }).click();
     await expect(page.getByText("جلسة مرافعة")).toBeVisible();
 
-    // A second hearing of the same lawyer, 30 minutes later, on another file.
+    // A second hearing of the same lawyer, same day, on another file: no clash warning any more.
     await page.goto("/app/agenda");
     await page.getByRole("button", { name: "إضافة جلسة" }).click();
     dialog = page.getByRole("dialog");
     await dialog.getByRole("combobox", { name: "القضية" }).click();
     await page.getByRole("option").filter({ hasText: `E2E/${a.tag}/2` }).click();
-    await dialog.getByLabel("نوع الجلسة").fill("جلسة استماع");
+    await dialog.getByLabel("موضوع الجلسة").fill("جلسة استماع");
     await dialog.getByLabel("التاريخ").fill("2031-05-12");
-    await dialog.getByLabel("الوقت").fill("10:30");
-    await expect(dialog.getByText(/تعارض مع جلسة أخرى/)).toBeVisible();
-    await dialog.getByRole("button", { name: "حفظ الجلسة" }).click();
-    await expect(dialog).toBeVisible();
-    await dialog.getByText("أؤكد البرمجة رغم التعارض").click();
     await dialog.getByRole("button", { name: "حفظ الجلسة" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole("alert").filter({ hasText: "تنبيه: يوجد تعارض" }).first()).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "تعارض" })).toHaveCount(0);
   });
 
   test("records a payment and downloads the real Arabic PDF receipt", async ({ page }) => {

@@ -4,6 +4,7 @@ import type { Ctx } from "../http/context.js";
 import { dateOnly, todayIn } from "../lib/time.js";
 import { can, caseScope, taskScope } from "./authorization.js";
 import { caseSummaryDTO, caseSummaryInclude, taskDTO, taskInclude } from "./dto.js";
+import { upcomingAppointmentsWhere } from "./appointments.js";
 import { financeTotals } from "./finance.js";
 import { conflictGroups, upcomingHearings } from "./hearings.js";
 
@@ -13,7 +14,7 @@ export async function dashboard(ctx: Ctx): Promise<DashboardDTO> {
   const day = dateOnly(today);
   const cases = { AND: [caseScope(ctx.actor), { archivedAt: null }] };
 
-  const [activeCases, distribution, recent, todayTasks, overdueTaskCount, hearings, groups, totals] = await Promise.all([
+  const [activeCases, distribution, recent, todayTasks, overdueTaskCount, hearings, groups, totals, upcomingAppointments] = await Promise.all([
     prisma.case.count({ where: { AND: [cases, { status: "ACTIVE" }] } }),
     prisma.case.groupBy({ by: ["type"], where: cases, _count: { _all: true } }),
     prisma.case.findMany({ where: { AND: [cases, { status: "ACTIVE" }] }, include: caseSummaryInclude(new Date()), orderBy: { updatedAt: "desc" }, take: 6 }),
@@ -25,13 +26,15 @@ export async function dashboard(ctx: Ctx): Promise<DashboardDTO> {
     }),
     prisma.task.count({ where: { AND: [taskScope(ctx.actor), { status: "OPEN", dueDate: { lt: day } }] } }),
     upcomingHearings(ctx, 7),
-    conflictGroups(ctx),
+    conflictGroups(),
     can(ctx.actor, "finance:read") ? financeTotals(ctx) : Promise.resolve(null),
+    can(ctx.actor, "client:read") ? prisma.appointment.count({ where: upcomingAppointmentsWhere(ctx) }) : Promise.resolve(0),
   ]);
 
   return {
     today,
     activeCases,
+    upcomingAppointments,
     hearingsNext7Days: hearings,
     todayTasks: todayTasks.map(taskDTO),
     overdueTaskCount,

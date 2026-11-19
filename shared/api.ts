@@ -37,6 +37,9 @@ export type CaseClientRole = (typeof CASE_CLIENT_ROLES)[number];
 export const HEARING_STATUSES = ["SCHEDULED", "HELD", "POSTPONED", "CANCELLED"] as const;
 export type HearingStatus = (typeof HEARING_STATUSES)[number];
 
+export const APPOINTMENT_STATUSES = ["SCHEDULED", "DONE", "CANCELLED"] as const;
+export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
+
 export const PAYMENT_METHODS = ["CASH", "CHECK", "BANK_TRANSFER", "CARD", "MOBILE", "OTHER"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -412,9 +415,25 @@ export interface CompleteTaskResultDTO {
 
 // ——— Dashboard ———
 
+/** A meeting with a client at the office («مواعيد الحرفاء»). */
+export interface AppointmentDTO {
+  id: string;
+  client: { id: string; fullName: string };
+  date: string;
+  /** "HH:MM" or null when no time was set. */
+  time: string | null;
+  subject: string;
+  notes: string | null;
+  status: AppointmentStatus;
+  version: number;
+  createdAt: string;
+}
+
 export interface DashboardDTO {
   today: string;
   activeCases: number;
+  /** Scheduled client appointments from today on. */
+  upcomingAppointments: number;
   hearingsNext7Days: HearingDTO[];
   todayTasks: TaskDTO[];
   overdueTaskCount: number;

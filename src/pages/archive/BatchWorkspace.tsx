@@ -44,7 +44,7 @@ import type { ArchiveBatch, ArchiveCategory, ArchiveItem } from "@/types";
 const STEP_KEYS = ["batch", "upload", "extract", "classify", "review", "match", "finalize"] as const;
 type StepKey = (typeof STEP_KEYS)[number];
 const STEP_LABELS: Record<StepKey, string> = {
-  batch: "الدفعة",
+  batch: "العلبة",
   upload: "رفع الوثائق",
   extract: "استخراج البيانات",
   classify: "التصنيف الذكي",
@@ -270,7 +270,7 @@ function StepUpload({ batch, items }: { batch: ArchiveBatch; items: ArchiveItem[
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <p>
-          {items.length} وثائق في الدفعة{expected ? ` من أصل ${expected} متوقعة` : ""}
+          {items.length} وثائق في العلبة{expected ? ` من أصل ${expected} متوقعة` : ""}
         </p>
         {expected && items.length < expected && <StatusBadge label={`${expected - items.length} وثائق لم تُرفع بعد`} tone="gold" />}
       </div>
@@ -649,8 +649,8 @@ export default function BatchWorkspace() {
 
   if (!batch) {
     return (
-      <AppShell title="دفعة الأرشفة" backTo="/app/archive" actionBar>
-        <EmptyState icon={FileStack} title="الدفعة غير موجودة" action={<Button onClick={() => navigate("/app/archive")}>العودة</Button>} />
+      <AppShell title="علبة الأرشفة" backTo="/app/archive" actionBar>
+        <EmptyState icon={FileStack} title="العلبة غير موجودة" action={<Button onClick={() => navigate("/app/archive")}>العودة</Button>} />
       </AppShell>
     );
   }

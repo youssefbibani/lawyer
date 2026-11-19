@@ -38,7 +38,7 @@ export function urgencyTone(urgency: HearingUrgency): StatusTone {
 export function urgencyLabel(urgency: HearingUrgency): string {
   switch (urgency) {
     case "urgent":
-      return "عاجل";
+      return "أكيد";
     case "week":
       return "هذا الأسبوع";
     case "later":

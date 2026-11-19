@@ -10,16 +10,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, fieldError, isApiError } from "@/backend/http";
-import { useApiMutation, useCan, useClients, useMe, useMembers } from "@/backend/queries";
-import { CASE_STATUS_LABELS, CASE_TYPE_LABELS, CLIENT_TYPE_LABELS } from "@/backend/labels";
-import { CASE_STATUSES, CASE_TYPES, CLIENT_TYPES, type CaseDetailDTO, type CaseStatus, type CaseType, type ClientType } from "../../../shared/api";
+import { useApiMutation, useClients, useMe, useMembers } from "@/backend/queries";
+import { CASE_TYPE_LABELS, CLIENT_TYPE_LABELS } from "@/backend/labels";
+import { CASE_TYPES, CLIENT_TYPES, type CaseDetailDTO, type CaseType, type ClientType } from "../../../shared/api";
 
 const NEW_CLIENT = "__new__";
 
 interface Values {
   reference: string;
   type: CaseType | "";
-  status: CaseStatus;
   court: string;
   description: string;
   assignedLawyerId: string;
@@ -28,12 +27,10 @@ interface Values {
   newClientType: ClientType;
   newClientPhone: string;
   hearingDate: string;
-  hearingTime: string;
 }
 
 export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: boolean; onOpenChange: (o: boolean) => void; defaultClientId?: string }) {
   const navigate = useNavigate();
-  const can = useCan();
   const { data: me } = useMe();
   const members = useMembers();
   const clients = useClients({ pageSize: 100, sort: "fullName:asc" }, open);
@@ -41,7 +38,6 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
   const blank = (): Values => ({
     reference: "",
     type: "",
-    status: "ACTIVE",
     court: "",
     description: "",
     assignedLawyerId: me && me.role !== "clerk" ? me.user.id : "",
@@ -50,7 +46,6 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
     newClientType: "INDIVIDUAL",
     newClientPhone: "",
     hearingDate: "",
-    hearingTime: "",
   });
   const [values, setValues] = useState<Values>(blank);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -71,16 +66,17 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
     const created = await api.post<CaseDetailDTO>("/cases", {
       reference: v.reference.trim(),
       type: v.type,
-      status: v.status,
+      // A new case is always active («قضية جديدة = قضية نشطة»).
+      status: "ACTIVE",
       court: v.court.trim(),
       description: v.description.trim() || null,
       assignedLawyerId: v.assignedLawyerId,
       ...(v.clientId === NEW_CLIENT ? { newClient: { type: v.newClientType, fullName: v.newClientName.trim(), phone: v.newClientPhone.trim() || null } } : { clientIds: [v.clientId] }),
     });
     let hearingError: string | undefined;
-    if (v.hearingDate && v.hearingTime) {
+    if (v.hearingDate) {
       try {
-        await api.post("/hearings", { caseId: created.id, date: v.hearingDate, time: v.hearingTime, court: v.court.trim(), type: "جلسة", acknowledgeConflicts: true });
+        await api.post("/hearings", { caseId: created.id, date: v.hearingDate, court: v.court.trim(), type: "جلسة" });
       } catch (err) {
         hearingError = (err as Error).message;
       }
@@ -91,12 +87,11 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (!values.reference.trim()) next.reference = "يرجى إدخال مرجع القضية";
+    if (!values.reference.trim()) next.reference = "يرجى إدخال عدد القضية";
     if (!values.type) next.type = "يرجى اختيار نوع القضية";
     if (!values.court.trim()) next.court = "يرجى إدخال اسم المحكمة";
     if (!values.assignedLawyerId) next.assignedLawyerId = "يرجى اختيار المحامي المكلّف";
     if (values.clientId === NEW_CLIENT && !values.newClientName.trim()) next.newClientName = "يرجى إدخال اسم الحريف";
-    if (!!values.hearingDate !== !!values.hearingTime) next.hearingTime = "حدّد تاريخ وساعة الجلسة معاً (أو اتركهما فارغين)";
     setErrors(next);
     if (Object.keys(next).length) return;
     setServerError(undefined);
@@ -118,7 +113,7 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>قضية جديدة</DialogTitle>
           <DialogDescription>أدخل بيانات القضية الجديدة لإضافتها إلى قائمة الملفات.</DialogDescription>
@@ -170,7 +165,7 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="nc-ref">مرجع القضية</Label>
+              <Label htmlFor="nc-ref">عدد القضية</Label>
               <Input id="nc-ref" placeholder="CC/2026/0001" dir="ltr" className="text-left" value={values.reference} onChange={(e) => set("reference", e.target.value)} />
               {err("reference")}
             </div>
@@ -191,12 +186,12 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
               {err("type")}
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="nc-court">المحكمة</Label>
-            <Input id="nc-court" placeholder="محكمة التعقيب — الدائرة المدنية" value={values.court} onChange={(e) => set("court", e.target.value)} />
-            {err("court")}
-          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="nc-court">المحكمة</Label>
+              <Input id="nc-court" placeholder="محكمة التعقيب — الدائرة المدنية" value={values.court} onChange={(e) => set("court", e.target.value)} />
+              {err("court")}
+            </div>
             <div className="space-y-1.5">
               <Label>المحامي المكلّف</Label>
               <Select value={values.assignedLawyerId} onValueChange={(v) => set("assignedLawyerId", v)}>
@@ -213,36 +208,16 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
               </Select>
               {err("assignedLawyerId")}
             </div>
-            <div className="space-y-1.5">
-              <Label>الحالة</Label>
-              <Select value={values.status} onValueChange={(v) => set("status", v as CaseStatus)} disabled={!can("case:status")}>
-                <SelectTrigger aria-label="الحالة">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CASE_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {CASE_STATUS_LABELS[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="nc-hdate">الجلسة الأولى (اختياري)</Label>
               <Input id="nc-hdate" type="date" value={values.hearingDate} onChange={(e) => set("hearingDate", e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="nc-htime">ساعة الجلسة</Label>
-              <Input id="nc-htime" type="time" value={values.hearingTime} onChange={(e) => set("hearingTime", e.target.value)} />
+              <Label htmlFor="nc-desc">وصف مختصر</Label>
+              <Textarea id="nc-desc" rows={1} className="min-h-10" placeholder="وصف موجز لموضوع القضية" value={values.description} onChange={(e) => set("description", e.target.value)} />
             </div>
-            <div className="col-span-2">{err("hearingTime")}</div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="nc-desc">وصف مختصر</Label>
-            <Textarea id="nc-desc" rows={3} placeholder="وصف موجز لموضوع القضية" value={values.description} onChange={(e) => set("description", e.target.value)} />
           </div>
           {serverError && (
             <p role="alert" className="text-sm text-destructive">

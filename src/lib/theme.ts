@@ -1,8 +1,11 @@
 const SETTINGS_KEY = "qasr-al-adala:settings";
 
+export type Accent = "gold" | "red";
+
 interface StoredAppearance {
   theme?: "light" | "dark";
   fontSize?: "small" | "medium" | "large";
+  accent?: Accent;
 }
 
 function readAppearance(): StoredAppearance {
@@ -21,6 +24,16 @@ export function getStoredTheme(): "light" | "dark" {
 export function getStoredFontSize(): "small" | "medium" | "large" {
   const size = readAppearance().fontSize;
   return size === "small" || size === "large" ? size : "medium";
+}
+
+export function getStoredAccent(): Accent {
+  return readAppearance().accent === "red" ? "red" : "gold";
+}
+
+/** "red" swaps the gold accent for red, the colour of the legal profession in Tunisia. */
+export function applyAccent(accent: Accent) {
+  if (accent === "gold") document.documentElement.removeAttribute("data-accent");
+  else document.documentElement.setAttribute("data-accent", accent);
 }
 
 export function applyTheme(theme: "light" | "dark") {

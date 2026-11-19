@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Search as SearchIcon, Users } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Search as SearchIcon, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -35,12 +35,17 @@ interface Form {
 
 const EMPTY: Form = { type: "INDIVIDUAL", fullName: "", phone: "", email: "", address: "", nationalId: "", notes: "" };
 
+const ALL_YEARS = "all";
+const THIS_YEAR = new Date().getFullYear();
+/** Registration years offered in the filter (this year and the nine before). */
+const YEARS = Array.from({ length: 10 }, (_, i) => String(THIS_YEAR - i));
+
 export default function Clients() {
   const can = useCan();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [q, setQ] = useState("");
-  const [archived, setArchived] = useState(false);
+  const [year, setYear] = useState(ALL_YEARS);
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<ClientDTO | "new" | null>(null);
   const [openId, setOpenId] = useState<string>();
@@ -50,9 +55,10 @@ export default function Clients() {
     const t = setTimeout(() => setQ(query.trim()), 300);
     return () => clearTimeout(t);
   }, [query]);
-  useEffect(() => setPage(1), [q, archived]);
+  useEffect(() => setPage(1), [q, year]);
 
-  const clients = useClients({ q, archived: archived ? "true" : undefined, page, pageSize: PAGE_SIZE });
+  // With a year chosen, the newest clients of that year come first.
+  const clients = useClients({ q, year: year === ALL_YEARS ? undefined : year, sort: year === ALL_YEARS ? undefined : "createdAt:desc", page, pageSize: PAGE_SIZE });
   const list = clients.data?.items ?? [];
   const pages = Math.max(1, Math.ceil((clients.data?.total ?? 0) / PAGE_SIZE));
 
@@ -65,10 +71,19 @@ export default function Clients() {
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالاسم، الهاتف، البريد أو المعرّف..." aria-label="بحث في الحرفاء" className="pr-9" />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" aria-pressed={archived} onClick={() => setArchived((a) => !a)}>
-              <Archive className="h-4 w-4" />
-              {archived ? "الحرفاء النشطون" : "المؤرشفون"}
-            </Button>
+            <Select value={year} onValueChange={setYear}>
+              <SelectTrigger className="w-36" aria-label="سنة التسجيل">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_YEARS}>كل السنوات</SelectItem>
+                {YEARS.map((y) => (
+                  <SelectItem key={y} value={y}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {can("client:write") && (
               <Button onClick={() => setEditing("new")}>
                 <Plus className="h-4 w-4" />
@@ -88,7 +103,7 @@ export default function Clients() {
             </Button>
           </div>
         ) : list.length === 0 ? (
-          <EmptyState icon={Users} title="لا توجد نتائج" description={q ? "لم يتم العثور على أي حريف مطابق." : archived ? "لا يوجد حرفاء مؤرشفون." : "لم يُسجَّل أي حريف بعد."} />
+          <EmptyState icon={Users} title="لا توجد نتائج" description={q ? "لم يتم العثور على أي حريف مطابق." : year !== ALL_YEARS ? `لا يوجد حرفاء مسجّلون سنة ${year}.` : "لم يُسجَّل أي حريف بعد."} />
         ) : (
           <ul className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="قائمة الحرفاء">
             {list.map((c) => (
@@ -101,7 +116,7 @@ export default function Clients() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="font-medium">{c.fullName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {CLIENT_TYPE_LABELS[c.type]} • {c.caseCount} ملفات
+                      {CLIENT_TYPE_LABELS[c.type]} • {c.caseCount} ملفات • <span className="font-mono">{c.createdAt.slice(0, 4)}</span>
                     </p>
                     {(c.phone || c.email) && (
                       <p className="text-xs text-muted-foreground" dir="ltr">
@@ -258,9 +273,9 @@ function ClientDetailDialog({
   onOpenCase: (caseId: string) => void;
 }) {
   const can = useCan();
+  const navigate = useNavigate();
   const detail = useClient(id);
   const c = detail.data;
-  const archive = useApiMutation(() => api.post<ClientDTO>(`/clients/${c!.id}/${c!.archivedAt ? "unarchive" : "archive"}`, { version: c!.version }), ["clients"]);
 
   return (
     <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
@@ -321,14 +336,12 @@ function ClientDetailDialog({
                     <Pencil className="h-4 w-4" />
                     تعديل
                   </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={archive.isPending}
-                    onClick={() => archive.mutate(undefined, { onSuccess: () => (toast.success(c.archivedAt ? "أُعيد تفعيل الحريف" : "تمت أرشفة الحريف"), onClose()), onError: (err) => toast.error(err.message) })}
-                  >
-                    {c.archivedAt ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                    {c.archivedAt ? "إلغاء الأرشفة" : "أرشفة"}
-                  </Button>
+                  {!c.archivedAt && (
+                    <Button variant="outline" onClick={() => navigate(`/app/appointments?new=1&client=${c.id}`)}>
+                      <CalendarCheck className="h-4 w-4" />
+                      موعد
+                    </Button>
+                  )}
                 </>
               )}
             </DialogFooter>

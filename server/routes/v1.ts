@@ -11,6 +11,7 @@ import { apiRateLimit, ctxOf, readJson, requireActor } from "../http/middleware.
 import { id, parse } from "../http/validation.js";
 import { audit } from "../services/audit.js";
 import { permissionsFor } from "../services/authorization.js";
+import * as appointments from "../services/appointments.js";
 import * as cases from "../services/cases.js";
 import * as clients from "../services/clients.js";
 import { dashboard } from "../services/dashboard.js";
@@ -92,6 +93,11 @@ export function v1Routes() {
   api.post("/clients/:id/archive", json(async (ctx, c) => clients.setClientArchived(ctx, param(c, "id"), true, await readJson(c))));
   api.post("/clients/:id/unarchive", json(async (ctx, c) => clients.setClientArchived(ctx, param(c, "id"), false, await readJson(c))));
 
+  // Client appointments («مواعيد الحرفاء»)
+  api.get("/appointments", json((ctx, c) => appointments.listAppointments(ctx, c.req.query())));
+  api.post("/appointments", json(async (ctx, c) => appointments.createAppointment(ctx, await readJson(c)), 201));
+  api.patch("/appointments/:id", json(async (ctx, c) => appointments.updateAppointment(ctx, param(c, "id"), await readJson(c))));
+
   // Cases
   api.get("/cases", json((ctx, c) => cases.listCases(ctx, c.req.query())));
   api.post("/cases", json(async (ctx, c) => cases.createCase(ctx, await readJson(c)), 201));
@@ -110,7 +116,7 @@ export function v1Routes() {
   api.get("/hearings", json((ctx, c) => hearings.listHearings(ctx, c.req.query())));
   api.post("/hearings", json(async (ctx, c) => hearings.createHearing(ctx, await readJson(c)), 201));
   api.get("/hearings/conflicts", json((ctx, c) => hearings.previewConflicts(ctx, c.req.query())));
-  api.get("/hearings/conflict-groups", json((ctx) => hearings.conflictGroups(ctx)));
+  api.get("/hearings/conflict-groups", json(() => hearings.conflictGroups()));
   api.get("/hearings/:id", json((ctx, c) => hearings.getHearing(ctx, param(c, "id"))));
   api.patch("/hearings/:id", json(async (ctx, c) => hearings.updateHearing(ctx, param(c, "id"), await readJson(c))));
   api.post("/hearings/:id/status", json(async (ctx, c) => hearings.changeHearingStatus(ctx, param(c, "id"), await readJson(c))));

@@ -154,6 +154,7 @@ export function dashboardFixture(today: string, extra: Partial<DashboardDTO> = {
   return {
     today,
     activeCases: 4,
+    upcomingAppointments: 0,
     hearingsNext7Days: [],
     todayTasks: [],
     overdueTaskCount: 0,

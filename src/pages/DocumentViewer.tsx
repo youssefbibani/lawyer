@@ -339,7 +339,7 @@ export default function DocumentViewer() {
                 </div>
               ))}
               <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">المرجع</span>
+                <span className="text-muted-foreground">عدد القضية</span>
                 {ownerCase ? (
                   <Link to={`/app/cases/${ownerCase.id}`}>
                     <CaseReference value={doc.caseRef} />

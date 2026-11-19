@@ -126,7 +126,7 @@ export default function CaseDetail() {
         <EmptyState
           icon={FileQuestion}
           title={missing ? "تعذر العثور على القضية" : "تعذر تحميل القضية"}
-          description={missing ? "قد يكون المرجع غير صحيح، أو أنك غير مكلّف بهذا الملف." : caseQuery.error!.message}
+          description={missing ? "قد يكون عدد القضية غير صحيح، أو أنك غير مكلّف بهذا الملف." : caseQuery.error!.message}
           action={<Button onClick={() => navigate("/app/cases")}>العودة إلى قائمة القضايا</Button>}
         />
       </AppShell>
@@ -190,7 +190,7 @@ export default function CaseDetail() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="min-w-0 lg:order-2 lg:col-span-2">
+          <div className="min-w-0 lg:order-1 lg:col-span-2">
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
@@ -253,7 +253,7 @@ export default function CaseDetail() {
                   <EmptyState
                     icon={FileText}
                     title="لا توجد وثائق"
-                    description={localCase ? "لم يتم رفع أي وثيقة لهذه القضية بعد." : "وحدة الأرشفة ما زالت تعمل محلياً في هذا المتصفح، ولا يوجد فيها ملف بنفس المرجع."}
+                    description={localCase ? "لم يتم رفع أي وثيقة لهذه القضية بعد." : "وحدة الأرشفة ما زالت تعمل محلياً في هذا المتصفح، ولا يوجد فيها ملف بنفس عدد القضية."}
                   />
                 ) : compact ? (
                   <ul className="space-y-3">
@@ -331,7 +331,7 @@ export default function CaseDetail() {
                     {hearings.data.items.map((h) => {
                       const urgency = urgencyOf(h.date);
                       return (
-                        <li key={h.id} className={cn("card-elevated flex flex-wrap items-center justify-between gap-3 p-4", h.status !== "SCHEDULED" && "opacity-75")}>
+                        <li key={h.id} className={cn("card-elevated flex flex-wrap items-center justify-between gap-3 p-4 sm:flex-row-reverse", h.status !== "SCHEDULED" && "opacity-75")}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium">{h.type}</p>
                             <p className="text-xs text-muted-foreground">
@@ -339,14 +339,14 @@ export default function CaseDetail() {
                               {h.room ? ` — ${h.room}` : ""}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {h.status === "SCHEDULED" ? (
                               <StatusBadge label={urgencyLabelOf(urgency)} tone={urgencyToneOf(urgency)} />
                             ) : (
                               <StatusBadge label={HEARING_STATUS_LABELS[h.status]} tone={h.status === "CANCELLED" ? "alert" : "neutral"} />
                             )}
                             <p className="font-mono text-xs">
-                              {formatArabicDate(h.date)} — <span dir="ltr">{h.time}</span>
+                              {formatArabicDate(h.date)}
                             </p>
                             <HearingActions hearing={h} />
                           </div>
@@ -371,7 +371,7 @@ export default function CaseDetail() {
                 ) : (
                   <ul className="space-y-3">
                     {caseTasks.map((t) => (
-                      <TaskItem key={t.id} task={t} showCase={false} onToggle={taskActions.toggle} onEdit={taskActions.openEdit} onDelete={taskActions.setDeleting} />
+                      <TaskItem key={t.id} task={t} showCase={false} finishing={taskActions.isFinishing(t.id)} onToggle={taskActions.toggle} onEdit={taskActions.openEdit} onDelete={taskActions.setDeleting} />
                     ))}
                   </ul>
                 )}
@@ -454,7 +454,7 @@ export default function CaseDetail() {
             </Tabs>
           </div>
 
-          <div className="space-y-6 lg:order-1">
+          <div className="space-y-6 lg:order-2">
             <Card className="hidden lg:block">
               <CardHeader>
                 <CardTitle>إجراءات سريعة</CardTitle>

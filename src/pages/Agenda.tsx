@@ -1,13 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { isSameDay } from "date-fns";
-import { AlertTriangle, BellPlus, CalendarDays, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { BellPlus, CalendarDays, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { CaseReference } from "@/components/shared/CaseReference";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SkeletonCards } from "@/components/shared/LoadingSkeleton";
@@ -15,13 +13,12 @@ import { HearingDialog } from "@/components/hearings/HearingDialog";
 import { MonthCalendar } from "@/components/hearings/MonthCalendar";
 import { HearingActions } from "@/components/hearings/HearingActions";
 import { TaskDialog, type TaskDefaults } from "@/components/tasks/TaskDialog";
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useIsCompact } from "@/hooks/use-media-query";
 import { urgencyLabelOf, urgencyToneOf } from "@/lib/status";
 import { formatArabicDate } from "@/lib/formatters";
 import { ARABIC_WEEKDAYS, ARABIC_WEEKDAYS_SHORT, addDays, parseISODate, startOfDay, toISODate, urgencyOf } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { useCan, useConflictGroups, useHearings, useMe } from "@/backend/queries";
+import { useCan, useHearings } from "@/backend/queries";
 import { HEARING_STATUS_LABELS } from "@/backend/labels";
 import type { HearingDTO } from "../../shared/api";
 
@@ -30,14 +27,8 @@ function startOfWeek(date: Date): Date {
   return addDays(d, -d.getDay()); // Sunday-first, like the month calendar
 }
 
-interface ReminderChannels {
-  inApp: boolean;
-  email: boolean;
-}
-
 export default function Agenda() {
   const can = useCan();
-  const { data: me } = useMe();
   const compact = useIsCompact();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -46,8 +37,6 @@ export default function Agenda() {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const listRef = useRef<HTMLDivElement>(null);
   const [reminderDefaults, setReminderDefaults] = useState<TaskDefaults | undefined>();
-  const [reminderChannels, setReminderChannels] = useLocalStorage<ReminderChannels>("qasr-al-adala:hearing-reminder-channels", { inApp: true, email: false });
-  const mailConfigured = !!me?.mail.configured;
 
   const today = toISODate(new Date());
   // Default window (-90d…+1y), widened to whatever month the calendar is showing.
@@ -60,9 +49,7 @@ export default function Agenda() {
     return { from: toISODate(from), to: toISODate(to) };
   }, [month]);
   const hearingsQuery = useHearings(range);
-  const conflictsQuery = useConflictGroups();
   const hearings = useMemo(() => hearingsQuery.data?.items ?? [], [hearingsQuery.data]);
-  const conflicts = conflictsQuery.data ?? [];
   const scheduled = useMemo(() => hearings.filter((h) => h.status === "SCHEDULED"), [hearings]);
 
   const visible = useMemo(() => {
@@ -84,9 +71,7 @@ export default function Agenda() {
       hearingId: h.id,
       title: `التذكير بـ${h.type} — ${h.clientName}`,
       dueDate: toISODate(addDays(parseISODate(h.date), -1)),
-      dueTime: "09:00",
-      notifyInApp: reminderChannels.inApp,
-      notifyEmail: reminderChannels.email && mailConfigured,
+      notifyInApp: true,
     });
   }
 
@@ -112,26 +97,6 @@ export default function Agenda() {
   return (
     <AppShell title="المفكرة الذكية" subtitle="جلسات المحاكم وتذكيرات المواعيد (بتوقيت تونس)">
       <div className="space-y-5 sm:space-y-6">
-        {conflicts.map((group) => (
-          <div key={group[0].id} role="alert" className="flex items-start gap-3 rounded-[var(--radius)] border border-alert/30 bg-alert/10 p-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-alert" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="font-medium text-alert">تنبيه: يوجد تعارض بين {group.length === 2 ? "جلستين" : `${group.length} جلسات`} للمحامي نفسه</p>
-              <p className="text-sm text-alert/90">
-                {group.map((h, i) => (
-                  <span key={h.id}>
-                    {i > 0 && " و "}
-                    <bdi className="font-mono" dir="ltr">
-                      {h.caseReference}
-                    </bdi>
-                  </span>
-                ))}{" "}
-                — {group[0].assignedLawyer.name} — بتاريخ {formatArabicDate(group[0].date)} على الساعة {group[0].time}. يُرجى مراجعة الجدول.
-              </p>
-            </div>
-          </div>
-        ))}
-
         <div className="flex flex-wrap items-center justify-between gap-3">
           {compact && (
             <Button variant="outline" onClick={() => setShowMonth((s) => !s)} aria-expanded={showMonth}>
@@ -249,19 +214,14 @@ export default function Agenda() {
                               {h.type} — {h.court}
                               {h.room ? ` — ${h.room}` : ""}
                             </p>
-                            <div className="mt-1 flex items-center justify-between gap-2">
-                              <p className="font-mono text-xs text-muted-foreground" dir="ltr">
-                                {h.time}
-                              </p>
-                              <div className="flex items-center gap-1">
-                                {can("task:write") && h.status === "SCHEDULED" && (
-                                  <Button variant="ghost" size="sm" onClick={() => remindFor(h)} aria-label={`إنشاء تذكير لجلسة ${h.clientName}`}>
-                                    <BellPlus className="h-4 w-4" />
-                                    تذكير
-                                  </Button>
-                                )}
-                                <HearingActions hearing={h} />
-                              </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <HearingActions hearing={h} />
+                              {can("task:write") && h.status === "SCHEDULED" && (
+                                <Button variant="outline" size="sm" className="h-8 gap-1 px-2 text-xs coarse:h-10" onClick={() => remindFor(h)} aria-label={`إنشاء تذكير لجلسة ${h.clientName}`}>
+                                  <BellPlus className="h-3.5 w-3.5" />
+                                  تذكير
+                                </Button>
+                              )}
                             </div>
                           </div>
                         );
@@ -272,34 +232,6 @@ export default function Agenda() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>تذكير ذكي</CardTitle>
-                <CardDescription>القنوات الافتراضية لتذكيرات الجلسات</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex min-h-11 items-center justify-between gap-3">
-                  <Label htmlFor="ch-inapp" className="font-normal">
-                    إشعار داخل التطبيق
-                  </Label>
-                  <Switch id="ch-inapp" checked={reminderChannels.inApp} onCheckedChange={(v) => setReminderChannels((c) => ({ ...c, inApp: v }))} />
-                </div>
-                <div className="flex min-h-11 items-center justify-between gap-3">
-                  <Label htmlFor="ch-email" className="font-normal">
-                    البريد الإلكتروني
-                    <span className="block text-xs text-muted-foreground">{mailConfigured ? "خدمة البريد مهيأة على الخادم" : "غير متاح: خدمة البريد غير مهيأة على الخادم"}</span>
-                  </Label>
-                  <Switch id="ch-email" checked={reminderChannels.email && mailConfigured} disabled={!mailConfigured} onCheckedChange={(v) => setReminderChannels((c) => ({ ...c, email: v }))} />
-                </div>
-                <div className="flex min-h-11 items-center justify-between gap-3">
-                  <Label htmlFor="ch-sms" className="font-normal">
-                    SMS اختياري
-                    <span className="block text-xs text-muted-foreground">غير متاح: لا يوجد مزوّد رسائل قصيرة مرتبط</span>
-                  </Label>
-                  <Switch id="ch-sms" checked={false} disabled />
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

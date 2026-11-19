@@ -322,7 +322,7 @@ export function analyze(itemId: string, to?: "review") {
   const suggestions = matchCases(draft, cases);
   const batch = db.batches.find((b) => b.id === item.batchId);
   if (batch?.defaultCaseId && !suggestions.some((s) => s.caseId === batch.defaultCaseId)) {
-    suggestions.push({ caseId: batch.defaultCaseId, score: 0.4, evidence: ["القضية المحددة عند إنشاء الدفعة"] });
+    suggestions.push({ caseId: batch.defaultCaseId, score: 0.4, evidence: ["القضية المحددة عند إنشاء العلبة"] });
   }
   const missingPages = detectMissingPages(inputs.map((p) => p.text));
   const keepHuman = (f: (typeof fields)[number]) => item.fields.find((x) => x.key === f.key && x.source === "human") ?? f;

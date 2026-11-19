@@ -61,7 +61,7 @@ describe("Cases page", () => {
     setup();
     const user = userEvent.setup();
     await screen.findByText("عائلة بن صالح");
-    await user.type(screen.getByPlaceholderText("ابحث بالحريف، المرجع، المحكمة..."), "مراد");
+    await user.type(screen.getByPlaceholderText("ابحث بالحريف، عدد القضية، المحكمة..."), "مراد");
     await waitFor(() => expect(screen.queryByText("عائلة بن صالح")).not.toBeInTheDocument());
     expect(screen.getByText("سامي مراد")).toBeInTheDocument();
   });
@@ -70,7 +70,7 @@ describe("Cases page", () => {
     setup();
     const user = userEvent.setup();
     await screen.findByText("عائلة بن صالح");
-    await user.type(screen.getByPlaceholderText("ابحث بالحريف، المرجع، المحكمة..."), "CC/2024/0512");
+    await user.type(screen.getByPlaceholderText("ابحث بالحريف، عدد القضية، المحكمة..."), "CC/2024/0512");
     await waitFor(() => expect(screen.queryByText("سامي مراد")).not.toBeInTheDocument());
     expect(screen.getByText("الهادي الطرابلسي")).toBeInTheDocument();
   });

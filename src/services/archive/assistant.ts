@@ -59,7 +59,7 @@ export function similarDocuments(item: ArchiveItem): AssistantBlock[] {
   if (item.duplicates.length) {
     blocks.push({
       type: "list",
-      title: "تكرارات محتملة داخل الأرشيف والدفعات",
+      title: "تكرارات محتملة داخل الأرشيف والعلب",
       items: item.duplicates.map((d) => ({ id: d.targetId, title: d.targetLabel, meta: d.evidence.join(" • "), badge: { label: d.kind === "exact" ? "مطابقة تامة" : `${Math.round(d.score * 100)}%`, tone: d.kind === "exact" ? "alert" : "gold" } })),
     });
   }
@@ -109,7 +109,7 @@ export function checkExtraction(item: ArchiveItem): AssistantBlock[] {
     }
   }
   for (const key of ["date", "caseRef", "court"] as const) {
-    if (!item.fields.some((f) => f.key === key)) issues.push(`لم يُستخرج «${{ date: "التاريخ", caseRef: "مرجع القضية", court: "المحكمة" }[key]}»: أدخله يدوياً إن وُجد.`);
+    if (!item.fields.some((f) => f.key === key)) issues.push(`لم يُستخرج «${{ date: "التاريخ", caseRef: "عدد القضية", court: "المحكمة" }[key]}»: أدخله يدوياً إن وُجد.`);
   }
   const alt = pageText(item).flatMap((t) => findDates(t)).map((d) => d.iso);
   if (new Set(alt).size > 1) issues.push(`وردت عدة تواريخ في النص (${[...new Set(alt)].slice(0, 4).join("، ")}): تأكد من اختيار تاريخ الوثيقة الصحيح.`);
@@ -147,7 +147,7 @@ export function lawyerBriefing(batch: ArchiveBatch, items: ArchiveItem[]): Assis
   return [
     {
       type: "text",
-      text: `ملخص الدفعة ${batch.reference} «${batch.name}» للمراجعة: ${items.length} وثائق — ${count("review")} في انتظار المراجعة، ${count("pending_approval")} في انتظار الموافقة، ${count("ready")} جاهزة، ${count("archived")} مؤرشفة، ${count("needs_correction") + count("failed")} تحتاج تدخلاً.${batch.expectedCount && items.length < batch.expectedCount ? ` العدد المتوقع ${batch.expectedCount}: قد تكون هناك وثائق لم تُرفع.` : ""}`,
+      text: `ملخص العلبة ${batch.reference} «${batch.name}» للمراجعة: ${items.length} وثائق — ${count("review")} في انتظار المراجعة، ${count("pending_approval")} في انتظار الموافقة، ${count("ready")} جاهزة، ${count("archived")} مؤرشفة، ${count("needs_correction") + count("failed")} تحتاج تدخلاً.${batch.expectedCount && items.length < batch.expectedCount ? ` العدد المتوقع ${batch.expectedCount}: قد تكون هناك وثائق لم تُرفع.` : ""}`,
     },
     { type: "list", title: "الوثائق ونقاط الانتباه", items: lines },
     { type: "notice", tone: "warning", text: "هذا ملخص تحضيري آلي؛ قرارات الاعتماد والربط والحفظ تبقى للمحامي المخوّل." },

@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { applyFontSize, applyTheme } from "@/lib/theme";
+import { applyAccent, applyFontSize, applyTheme, type Accent } from "@/lib/theme";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { NotificationsCard, OfficeCard, ProfileCard } from "@/components/settings/AccountCards";
@@ -25,10 +25,11 @@ import { config } from "@/config";
 import type { AssistantPrefs, UserSettings, VoiceProviderId } from "@/types";
 
 /** Appearance preferences are per device (local); everything else on this page is stored on the server. */
-const DEFAULT_SETTINGS: Pick<UserSettings, "fontSize" | "density" | "theme"> = { fontSize: "medium", density: "comfortable", theme: "light" };
+type Appearance = Pick<UserSettings, "fontSize" | "density" | "theme"> & { accent?: Accent };
+const DEFAULT_SETTINGS: Appearance = { fontSize: "medium", density: "comfortable", theme: "light", accent: "gold" };
 
 export default function Settings() {
-  const [settings, setSettings] = useLocalStorage<Pick<UserSettings, "fontSize" | "density" | "theme">>("qasr-al-adala:settings", DEFAULT_SETTINGS);
+  const [settings, setSettings] = useLocalStorage<Appearance>("qasr-al-adala:settings", DEFAULT_SETTINGS);
   const db = useDB();
   const user = useCurrentUser();
   const prefs = db.prefs;
@@ -44,6 +45,11 @@ export default function Settings() {
   function onThemeChange(theme: "light" | "dark") {
     setSettings((prev) => ({ ...prev, theme }));
     applyTheme(theme);
+  }
+
+  function onAccentChange(accent: Accent) {
+    setSettings((prev) => ({ ...prev, accent }));
+    applyAccent(accent);
   }
 
   return (
@@ -109,6 +115,25 @@ export default function Settings() {
                 <Button type="button" variant={settings.theme === "dark" ? "gold" : "outline"} className="flex-1" onClick={() => onThemeChange("dark")}>
                   الوضع الداكن
                 </Button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>لون التمييز</Label>
+              <div className="flex gap-2" role="radiogroup" aria-label="لون التمييز">
+                {(
+                  [
+                    { value: "gold", label: "ذهبي", swatch: "hsl(43 53% 54%)" },
+                    { value: "red", label: "أحمر (لون المحاماة)", swatch: "hsl(355 65% 58%)" },
+                  ] as const
+                ).map((o) => {
+                  const selected = (settings.accent ?? "gold") === o.value;
+                  return (
+                    <Button key={o.value} type="button" role="radio" aria-checked={selected} variant={selected ? "gold" : "outline"} className="flex-1" onClick={() => onAccentChange(o.value)}>
+                      <span className="h-3.5 w-3.5 rounded-full border border-foreground/20" style={{ backgroundColor: o.swatch }} aria-hidden="true" />
+                      {o.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           </CardContent>

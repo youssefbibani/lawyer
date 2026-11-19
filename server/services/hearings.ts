@@ -14,11 +14,17 @@ import { hearingDTO, hearingInclude } from "./dto.js";
 const MAX_DURATION = 1440;
 const duration = z.number({ invalid_type_error: "المدة غير صالحة" }).int().min(5, "المدة الدنيا 5 دقائق").max(MAX_DURATION, "المدة القصوى 24 ساعة");
 
+/**
+ * The office enters hearings by date only (no time, no duration fields). A stored time is still
+ * needed for ordering and day-before reminders, so an omitted time defaults to the start of the
+ * court day. For the same reason, two hearings on the same day are normal: clash checks are off.
+ */
+export const DEFAULT_HEARING_TIME = "09:00";
+
 const createBody = z.object({
   caseId: id,
-  // A hearing always has an explicit time: the API never assumes one.
   date: isoDate,
-  time: hhmm,
+  time: hhmm.default(DEFAULT_HEARING_TIME),
   durationMinutes: duration.default(60),
   court: requiredText(200, "يرجى إدخال المحكمة"),
   chamber: optionalText(200),
@@ -47,7 +53,7 @@ const statusBody = z
     status: z.enum(["HELD", "POSTPONED", "CANCELLED"], { errorMap: () => ({ message: "حالة غير صالحة" }) }),
     reason: optionalText(500),
     /** For POSTPONED: the new hearing date/time, created as a follow-up hearing. */
-    next: z.object({ date: isoDate, time: hhmm }).optional(),
+    next: z.object({ date: isoDate, time: hhmm.default(DEFAULT_HEARING_TIME) }).optional(),
     acknowledgeConflicts: z.boolean().default(false),
     version,
   })
@@ -63,13 +69,7 @@ const listQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(100),
 });
 
-const conflictQuery = z.object({
-  caseId: id,
-  date: isoDate,
-  time: hhmm,
-  durationMinutes: z.coerce.number().int().min(5).max(MAX_DURATION).default(60),
-  excludeId: id.optional(),
-});
+const conflictQuery = z.object({ caseId: id });
 
 function instant(date: string, time: string, tz: string): Date {
   const at = zonedToUtc(date, time, tz);
@@ -79,55 +79,12 @@ function instant(date: string, time: string, tz: string): Date {
 
 const hearingWhere = (actor: Actor): Prisma.HearingWhereInput => ({ organizationId: actor.organizationId, case: caseScope(actor) });
 
-/** Serialises conflict checks for one lawyer so two concurrent bookings cannot both miss each other. */
-async function lockLawyerSchedule(tx: Tx, organizationId: string, lawyerId: string) {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hearing:${organizationId}:${lawyerId}`}, 0))`;
-}
-
-/** Overlapping SCHEDULED hearings of the same assigned lawyer. Details only for cases the actor may see. */
-export async function findConflicts(
-  tx: Tx,
-  actor: Actor,
-  args: { lawyerId: string; startsAt: Date; durationMinutes: number; excludeId?: string },
-): Promise<HearingConflictsDTO> {
-  const start = args.startsAt.getTime();
-  const end = start + args.durationMinutes * 60_000;
-  const candidates = await tx.hearing.findMany({
-    where: {
-      organizationId: actor.organizationId,
-      status: "SCHEDULED",
-      ...(args.excludeId ? { id: { not: args.excludeId } } : {}),
-      startsAt: { lt: new Date(end), gt: new Date(start - MAX_DURATION * 60_000) },
-      case: { assignedLawyerId: args.lawyerId },
-    },
-    include: hearingInclude,
-    orderBy: { startsAt: "asc" },
-  });
-  const overlapping = candidates.filter((h) => h.startsAt.getTime() + h.durationMinutes * 60_000 > start);
-  if (!overlapping.length) return { hearings: [], hiddenCount: 0 };
-  const visible = new Set(
-    (await tx.case.findMany({ where: { AND: [{ id: { in: overlapping.map((h) => h.caseId) } }, caseScope(actor)] }, select: { id: true } })).map((c) => c.id),
-  );
-  const shown = overlapping.filter((h) => visible.has(h.caseId));
-  return { hearings: shown.map(hearingDTO), hiddenCount: overlapping.length - shown.length };
-}
-
-function assertNoConflicts(conflicts: HearingConflictsDTO, acknowledged: boolean) {
-  if (!acknowledged && conflicts.hearings.length + conflicts.hiddenCount > 0) {
-    throw new AppError("HEARING_CONFLICT", "يتعارض هذا الموعد مع جلسة أخرى للمحامي نفسه. أكّد البرمجة رغم التعارض أو غيّر الموعد.", { data: conflicts });
-  }
-}
-
+/** Kept for API compatibility: hearing clash checks are off (see DEFAULT_HEARING_TIME), so there are never conflicts. */
 export async function previewConflicts(ctx: Ctx, raw: unknown): Promise<HearingConflictsDTO> {
   assertCan(ctx, "case:read");
-  const q = parse(conflictQuery, raw);
-  const c = await loadAccessibleCase(prisma, ctx.actor, q.caseId);
-  return findConflicts(prisma, ctx.actor, {
-    lawyerId: c.assignedLawyerId,
-    startsAt: instant(q.date, q.time, ctx.actor.office.timeZone),
-    durationMinutes: q.durationMinutes,
-    excludeId: q.excludeId,
-  });
+  const q = parse(conflictQuery.passthrough(), raw);
+  await loadAccessibleCase(prisma, ctx.actor, q.caseId);
+  return { hearings: [], hiddenCount: 0 };
 }
 
 export async function listHearings(ctx: Ctx, raw: unknown): Promise<Paginated<HearingDTO>> {
@@ -172,36 +129,9 @@ export async function hearingHistory(ctx: Ctx, hearingId: string): Promise<Heari
   }));
 }
 
-/** Upcoming groups of overlapping hearings (same lawyer) among hearings the actor may see. */
-export async function conflictGroups(ctx: Ctx, fromDate?: string): Promise<HearingDTO[][]> {
-  const tz = ctx.actor.office.timeZone;
-  const from = dayRange(fromDate ?? todayIn(tz), tz).start;
-  const rows = await prisma.hearing.findMany({
-    where: { AND: [hearingWhere(ctx.actor), { status: "SCHEDULED", startsAt: { gte: from } }] },
-    include: hearingInclude,
-    orderBy: { startsAt: "asc" },
-    take: 500,
-  });
-  const groups: (typeof rows)[] = [];
-  const byLawyer = new Map<string, typeof rows>();
-  for (const h of rows) byLawyer.set(h.case.assignedLawyer.userId, [...(byLawyer.get(h.case.assignedLawyer.userId) ?? []), h]);
-  for (const list of byLawyer.values()) {
-    let current: typeof rows = [];
-    let currentEnd = 0;
-    for (const h of list) {
-      const start = h.startsAt.getTime();
-      if (current.length && start < currentEnd) {
-        current.push(h);
-        currentEnd = Math.max(currentEnd, start + h.durationMinutes * 60_000);
-      } else {
-        if (current.length > 1) groups.push(current);
-        current = [h];
-        currentEnd = start + h.durationMinutes * 60_000;
-      }
-    }
-    if (current.length > 1) groups.push(current);
-  }
-  return groups.sort((a, b) => a[0].startsAt.getTime() - b[0].startsAt.getTime()).map((g) => g.map(hearingDTO));
+/** Kept for API compatibility: hearing clash checks are off (see DEFAULT_HEARING_TIME). */
+export async function conflictGroups(): Promise<HearingDTO[][]> {
+  return [];
 }
 
 async function cancelPendingReminders(tx: Tx, organizationId: string, hearingId: string) {
@@ -216,8 +146,6 @@ export async function createHearing(ctx: Ctx, raw: unknown): Promise<HearingDTO>
   const created = await prisma.$transaction(async (tx) => {
     const c = await loadAccessibleCase(tx, ctx.actor, input.caseId);
     if (c.status === "CLOSED") throw new AppError("VALIDATION_FAILED", "لا يمكن برمجة جلسة لملف مختوم.");
-    await lockLawyerSchedule(tx, ctx.actor.organizationId, c.assignedLawyerId);
-    assertNoConflicts(await findConflicts(tx, ctx.actor, { lawyerId: c.assignedLawyerId, startsAt, durationMinutes: input.durationMinutes }), input.acknowledgeConflicts);
     const h = await tx.hearing.create({
       data: {
         organizationId: ctx.actor.organizationId,
@@ -243,8 +171,8 @@ export async function createHearing(ctx: Ctx, raw: unknown): Promise<HearingDTO>
       resourceId: h.id,
       caseId: c.id,
       operation: "hearing.create",
-      summary: `برمجة ${input.type} بتاريخ ${input.date} على الساعة ${input.time}`,
-      after: { startsAt, durationMinutes: input.durationMinutes, conflictsAcknowledged: input.acknowledgeConflicts },
+      summary: `برمجة ${input.type} بتاريخ ${input.date}`,
+      after: { startsAt, durationMinutes: input.durationMinutes },
     });
     return h;
   });
@@ -256,7 +184,7 @@ export async function updateHearing(ctx: Ctx, hearingId: string, raw: unknown): 
   const input = parse(updateBody, raw);
   const tz = ctx.actor.office.timeZone;
   await prisma.$transaction(async (tx) => {
-    const existing = await tx.hearing.findFirst({ where: { AND: [{ id: hearingId }, hearingWhere(ctx.actor)] }, include: { case: { select: { assignedLawyerId: true } } } });
+    const existing = await tx.hearing.findFirst({ where: { AND: [{ id: hearingId }, hearingWhere(ctx.actor)] } });
     if (!existing) throw notFound("الجلسة");
     if (existing.status !== "SCHEDULED") throw new AppError("CONFLICT", "لا يمكن تعديل جلسة منعقدة أو مؤجلة أو ملغاة.");
     const old = utcToZoned(existing.startsAt, existing.timeZone);
@@ -265,10 +193,6 @@ export async function updateHearing(ctx: Ctx, hearingId: string, raw: unknown): 
     const startsAt = instant(date, time, tz);
     const durationMinutes = input.durationMinutes ?? existing.durationMinutes;
     const rescheduled = startsAt.getTime() !== existing.startsAt.getTime() || durationMinutes !== existing.durationMinutes;
-    if (rescheduled) {
-      await lockLawyerSchedule(tx, ctx.actor.organizationId, existing.case.assignedLawyerId);
-      assertNoConflicts(await findConflicts(tx, ctx.actor, { lawyerId: existing.case.assignedLawyerId, startsAt, durationMinutes, excludeId: hearingId }), input.acknowledgeConflicts);
-    }
     const data = {
       startsAt,
       timeZone: tz,
@@ -312,7 +236,7 @@ export async function changeHearingStatus(ctx: Ctx, hearingId: string, raw: unkn
   if (input.status === "CANCELLED") assertCan(ctx, "hearing:cancel");
   const tz = ctx.actor.office.timeZone;
   const nextId = await prisma.$transaction(async (tx) => {
-    const existing = await tx.hearing.findFirst({ where: { AND: [{ id: hearingId }, hearingWhere(ctx.actor)] }, include: { case: { select: { assignedLawyerId: true, status: true } } } });
+    const existing = await tx.hearing.findFirst({ where: { AND: [{ id: hearingId }, hearingWhere(ctx.actor)] } });
     if (!existing) throw notFound("الجلسة");
     if (existing.status !== "SCHEDULED") throw new AppError("CONFLICT", "تم تحديد مآل هذه الجلسة مسبقاً.");
     const result = await tx.hearing.updateMany({
@@ -337,8 +261,6 @@ export async function changeHearingStatus(ctx: Ctx, hearingId: string, raw: unkn
 
     if (input.status !== "POSTPONED" || !input.next) return null;
     const startsAt = instant(input.next.date, input.next.time, tz);
-    await lockLawyerSchedule(tx, ctx.actor.organizationId, existing.case.assignedLawyerId);
-    assertNoConflicts(await findConflicts(tx, ctx.actor, { lawyerId: existing.case.assignedLawyerId, startsAt, durationMinutes: existing.durationMinutes }), input.acknowledgeConflicts);
     const follow = await tx.hearing.create({
       data: {
         organizationId: ctx.actor.organizationId,
@@ -358,7 +280,7 @@ export async function changeHearingStatus(ctx: Ctx, hearingId: string, raw: unkn
     await tx.hearingEvent.create({
       data: { organizationId: ctx.actor.organizationId, hearingId: follow.id, kind: "CREATED", reason: `تأجيل الجلسة ${hearingId}`, actorId: ctx.actor.userId, after: { ...input.next, postponedFrom: hearingId } },
     });
-    await audit(tx, ctx, { resourceType: "hearing", resourceId: follow.id, caseId: existing.caseId, operation: "hearing.create", summary: `جلسة مؤجلة إلى ${input.next.date} على الساعة ${input.next.time}`, after: { postponedFrom: hearingId } });
+    await audit(tx, ctx, { resourceType: "hearing", resourceId: follow.id, caseId: existing.caseId, operation: "hearing.create", summary: `جلسة مؤجلة إلى ${input.next.date}`, after: { postponedFrom: hearingId } });
     return follow.id;
   });
   return { hearing: await getHearing(ctx, hearingId), next: nextId ? await getHearing(ctx, nextId) : null };

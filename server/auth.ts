@@ -12,7 +12,8 @@ import { prisma } from "./db.js";
 import { env, trustedOrigins } from "./env.js";
 import { getMailer } from "./services/mailer.js";
 
-export const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12 hours
+/** Users stay signed in: one year, renewed (at most hourly) while the app is in use. */
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 365;
 export const PASSWORD_MIN_LENGTH = 10;
 export const CLIENT_IP_HEADER = "x-qasr-client-ip";
 

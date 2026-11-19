@@ -1,20 +1,21 @@
 import { useState } from "react";
-import { CalendarClock, CheckCircle2, History, Loader2, MoreVertical, PauseCircle, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, History, Loader2, PauseCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HearingDialog } from "@/components/hearings/HearingDialog";
-import { api, isApiError } from "@/backend/http";
+import { api } from "@/backend/http";
 import { useApiMutation, useCan, useHearingHistory } from "@/backend/queries";
 import { formatArabicDate } from "@/lib/formatters";
 import type { HearingDTO, HearingEventDTO } from "../../../shared/api";
 
 type Outcome = "HELD" | "POSTPONED" | "CANCELLED";
+
+/** Compact, always-visible option button. */
+const chip = "h-8 gap-1 px-2 text-xs coarse:h-10";
 
 const OUTCOME_TITLES: Record<Outcome, string> = { HELD: "تسجيل انعقاد الجلسة", POSTPONED: "تأجيل الجلسة", CANCELLED: "إلغاء الجلسة" };
 
@@ -34,8 +35,6 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [nextDate, setNextDate] = useState("");
-  const [nextTime, setNextTime] = useState("");
-  const [ack, setAck] = useState(false);
   const [error, setError] = useState<string>();
   const history = useHearingHistory(historyOpen ? hearing.id : undefined);
 
@@ -75,12 +74,17 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
         </Dialog>
   );
 
+  const historyButton = (
+    <Button type="button" variant="ghost" size="sm" className={chip} onClick={() => setHistoryOpen(true)}>
+      <History className="h-3.5 w-3.5" />
+      السجل
+    </Button>
+  );
+
   if (!can("hearing:write")) {
     return (
       <>
-        <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} aria-label={`سجل الجلسة ${hearing.type}`}>
-          <History className="h-4 w-4" />
-        </Button>
+        {historyButton}
         {historyDialog}
       </>
     );
@@ -90,8 +94,6 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
     setOutcome(o);
     setReason("");
     setNextDate("");
-    setNextTime("");
-    setAck(false);
     setError(undefined);
   }
 
@@ -99,60 +101,46 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
     e.preventDefault();
     if (!outcome) return;
     if (outcome !== "HELD" && !reason.trim()) return setError("يرجى ذكر السبب");
-    if ((nextDate && !nextTime) || (!nextDate && nextTime)) return setError("حدّد تاريخ وساعة الجلسة المقبلة معاً");
     change.mutate(
-      { status: outcome, reason: reason.trim() || null, version: hearing.version, acknowledgeConflicts: ack, ...(outcome === "POSTPONED" && nextDate ? { next: { date: nextDate, time: nextTime } } : {}) },
+      { status: outcome, reason: reason.trim() || null, version: hearing.version, ...(outcome === "POSTPONED" && nextDate ? { next: { date: nextDate } } : {}) },
       {
         onSuccess: (r) => {
-          toast.success(OUTCOME_TITLES[outcome], r.next ? { description: `الجلسة المقبلة: ${formatArabicDate(r.next.date)} على الساعة ${r.next.time}` } : undefined);
+          toast.success(OUTCOME_TITLES[outcome], r.next ? { description: `الجلسة المقبلة: ${formatArabicDate(r.next.date)}` } : undefined);
           setOutcome(null);
         },
-        onError: (err) => setError(isApiError(err, "HEARING_CONFLICT") ? `${err.message} (فعّل خيار التأكيد للمتابعة)` : err.message),
+        onError: (err) => setError(err.message),
       },
     );
   }
 
+  // The options are shown as visible buttons (no hidden "⋮" menu).
   return (
     <>
-      <DropdownMenu dir="rtl">
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`إجراءات الجلسة: ${hearing.type}`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring coarse:h-11 coarse:w-11"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {scheduled && (
-            <>
-              <DropdownMenuItem className="min-h-11" onSelect={() => setEditing(true)}>
-                <CalendarClock className="h-4 w-4" />
-                تعديل الموعد
-              </DropdownMenuItem>
-              <DropdownMenuItem className="min-h-11" onSelect={() => open("HELD")}>
-                <CheckCircle2 className="h-4 w-4" />
-                انعقدت الجلسة
-              </DropdownMenuItem>
-              <DropdownMenuItem className="min-h-11" onSelect={() => open("POSTPONED")}>
-                <PauseCircle className="h-4 w-4" />
-                تأجيل
-              </DropdownMenuItem>
-              {can("hearing:cancel") && (
-                <DropdownMenuItem className="min-h-11 text-alert focus:text-alert" onSelect={() => open("CANCELLED")}>
-                  <XCircle className="h-4 w-4" />
-                  إلغاء الجلسة
-                </DropdownMenuItem>
-              )}
-            </>
-          )}
-          <DropdownMenuItem className="min-h-11" onSelect={() => setHistoryOpen(true)}>
-            <History className="h-4 w-4" />
-            سجل الجلسة
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`إجراءات الجلسة: ${hearing.type}`}>
+        {scheduled && (
+          <>
+            <Button type="button" variant="outline" size="sm" className={chip} onClick={() => open("HELD")}>
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+              انعقدت
+            </Button>
+            <Button type="button" variant="outline" size="sm" className={chip} onClick={() => open("POSTPONED")}>
+              <PauseCircle className="h-3.5 w-3.5 text-gold-deep" />
+              تأجيل
+            </Button>
+            <Button type="button" variant="outline" size="sm" className={chip} onClick={() => setEditing(true)}>
+              <CalendarClock className="h-3.5 w-3.5" />
+              تعديل
+            </Button>
+            {can("hearing:cancel") && (
+              <Button type="button" variant="outline" size="sm" className={`${chip} text-alert hover:text-alert`} onClick={() => open("CANCELLED")}>
+                <XCircle className="h-3.5 w-3.5" />
+                إلغاء
+              </Button>
+            )}
+          </>
+        )}
+        {historyButton}
+      </div>
 
       <HearingDialog open={editing} onOpenChange={setEditing} hearing={hearing} />
 
@@ -161,7 +149,7 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
           <DialogHeader>
             <DialogTitle>{outcome ? OUTCOME_TITLES[outcome] : ""}</DialogTitle>
             <DialogDescription>
-              {hearing.type} — {hearing.clientName} ({formatArabicDate(hearing.date)} {hearing.time})
+              {hearing.type} — {hearing.clientName} ({formatArabicDate(hearing.date)})
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submit} className="space-y-4" noValidate>
@@ -170,19 +158,9 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
               <Input id="outcome-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
             {outcome === "POSTPONED" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="next-date">تاريخ الجلسة المقبلة</Label>
-                  <Input id="next-date" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="next-time">الساعة</Label>
-                  <Input id="next-time" type="time" value={nextTime} onChange={(e) => setNextTime(e.target.value)} />
-                </div>
-                <label className="col-span-2 flex min-h-11 cursor-pointer items-center gap-2 text-xs">
-                  <Checkbox checked={ack} onCheckedChange={(v) => setAck(v === true)} />
-                  أؤكد البرمجة حتى عند وجود تعارض
-                </label>
+              <div className="space-y-1.5">
+                <Label htmlFor="next-date">تاريخ الجلسة المقبلة (اختياري)</Label>
+                <Input id="next-date" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
               </div>
             )}
             {error && (

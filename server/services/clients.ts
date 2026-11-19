@@ -26,6 +26,8 @@ const listQuery = pagination.extend({
   q: z.string().trim().max(100).optional(),
   type: z.enum(CLIENT_TYPES).optional(),
   archived: boolParam,
+  /** Only clients registered in this calendar year. */
+  year: z.coerce.number().int().min(1900).max(2200).optional(),
   sort: sortParam(["fullName", "createdAt", "updatedAt"] as const, "fullName:asc"),
 });
 
@@ -40,6 +42,7 @@ export async function listClients(ctx: Ctx, raw: unknown): Promise<Paginated<Cli
       q.type ? { type: q.type } : {},
       q.archived === undefined ? { archivedAt: null } : q.archived ? { archivedAt: { not: null } } : { archivedAt: null },
       q.q ? { searchText: { contains: normalizeSearch(q.q) } } : {},
+      q.year ? { createdAt: { gte: new Date(Date.UTC(q.year, 0, 1)), lt: new Date(Date.UTC(q.year + 1, 0, 1)) } } : {},
     ],
   };
   const [total, rows] = await prisma.$transaction([

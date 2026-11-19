@@ -16,6 +16,7 @@ import NotFound from "@/pages/NotFound";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Cases = lazy(() => import("@/pages/Cases"));
 const Clients = lazy(() => import("@/pages/Clients"));
+const Appointments = lazy(() => import("@/pages/Appointments"));
 const CaseDetail = lazy(() => import("@/pages/CaseDetail"));
 const ArchiveDashboard = lazy(() => import("@/pages/archive/ArchiveDashboard"));
 const BatchCreate = lazy(() => import("@/pages/archive/BatchCreate"));
@@ -72,6 +73,7 @@ function App() {
               <Route path="cases" element={page(<Cases />)} />
               <Route path="cases/:id" element={page(<CaseDetail />)} />
               <Route path="clients" element={page(<Clients />)} />
+              <Route path="appointments" element={page(<Appointments />)} />
               <Route path="tasks" element={page(<Tasks />)} />
               <Route path="archive" element={page(<ArchiveDashboard />)} />
               <Route path="archive/new" element={page(<BatchCreate />)} />

@@ -93,7 +93,7 @@ ${options.cancelled ? '<div class="stamp">وصل ملغى</div>' : ""}
 <table>
   ${row("الحريف", esc(s.client?.fullName ?? "—"))}
   ${s.client?.nationalId ? row("المعرّف", esc(s.client.nationalId), true) : ""}
-  ${row("مرجع الملف", esc(s.case.reference), true)}
+  ${row("عدد القضية", esc(s.case.reference), true)}
   ${row("المحكمة", esc(s.case.court))}
   ${s.agreement.title ? row("موضوع الأتعاب", esc(s.agreement.title)) : ""}
   ${row("المبلغ المقبوض", `<span class="amount">${esc(formatAmount(s.payment.amount, s.payment.currency))}</span>`)}

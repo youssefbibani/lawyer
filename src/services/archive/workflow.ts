@@ -51,7 +51,7 @@ export const CATEGORY_LABELS: Record<ArchiveCategory, string> = {
   minutes: "محاضر جلسات",
   contract: "عقود",
   correspondence: "مراسلات",
-  power_of_attorney: "توكيلات",
+  power_of_attorney: "تواكيل",
   financial: "وثائق مالية",
   other: "وثائق أخرى",
 };

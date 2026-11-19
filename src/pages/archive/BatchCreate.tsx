@@ -45,21 +45,21 @@ export default function BatchCreate() {
       defaultCaseId: values.defaultCaseId || undefined,
     });
     if (!r.ok) return setError(r.error);
-    toast.success("حُفظت الدفعة كمسودة", { description: `${r.data.reference} — يمكنك متابعتها لاحقاً دون فقدان التقدم.` });
+    toast.success("حُفظت العلبة كمسودة", { description: `${r.data.reference} — يمكنك متابعتها لاحقاً دون فقدان التقدم.` });
     navigate(`/app/archive/batches/${r.data.id}?step=upload`);
   }
 
   return (
-    <AppShell title="إنشاء دفعة أرشفة" subtitle="الخطوة 1 من 7" backTo="/app/archive" actionBar>
+    <AppShell title="إنشاء علبة أرشفة" subtitle="الخطوة 1 من 7" backTo="/app/archive" actionBar>
       <form onSubmit={submit} className="mx-auto max-w-2xl space-y-5" noValidate>
         <Card>
           <CardHeader>
-            <CardTitle>بيانات الدفعة</CardTitle>
-            <CardDescription>الدفعة تجمع وثائق علبة أو ملف ورقي واحد، وتسمح بمتابعة العمل على مراحل.</CardDescription>
+            <CardTitle>بيانات العلبة</CardTitle>
+            <CardDescription>العلبة تجمع وثائق علبة ورقية أو ملف واحد، وتسمح بمتابعة العمل على مراحل.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="b-name">اسم الدفعة</Label>
+              <Label htmlFor="b-name">اسم العلبة</Label>
               <Input id="b-name" value={values.name} onChange={(e) => set("name", e.target.value)} placeholder="مثال: أرشيف قضايا الميراث 2018 — العلبة 7" />
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -124,7 +124,7 @@ export default function BatchCreate() {
           <div className="mx-auto grid max-w-2xl grid-cols-1 gap-2 sm:flex">
             <Button type="submit" size="lg">
               <FolderPlus className="h-4 w-4" />
-              حفظ الدفعة ومتابعة الرفع
+              حفظ العلبة ومتابعة الرفع
             </Button>
             <Button type="button" variant="ghost" size="lg" onClick={() => navigate("/app/archive")}>
               إلغاء

@@ -60,8 +60,8 @@ export function nextBatchReference(db: DemoDatabase = getDB(), now = new Date())
 // ——— Batches ———
 
 const batchInput = z.object({
-  name: z.string().trim().min(2, "يرجى إدخال اسم الدفعة"),
-  reference: z.string().trim().min(3, "يرجى إدخال مرجع الدفعة"),
+  name: z.string().trim().min(2, "يرجى إدخال اسم العلبة"),
+  reference: z.string().trim().min(3, "يرجى إدخال مرجع العلبة"),
   location: z.string().trim().min(2, "يرجى تحديد مكان الحفظ المادي"),
   responsibleId: z.string().min(1, "يرجى اختيار الموظف المسؤول"),
   notes: z.string().optional(),
@@ -76,14 +76,14 @@ export function createBatch(input: BatchInput): ApiResult<ArchiveBatch> {
   if (denied) return fail("forbidden", denied);
   const parsed = batchInput.safeParse(input);
   if (!parsed.success) return fail("validation", parsed.error.issues[0]?.message ?? "بيانات غير صالحة");
-  if (db.batches.some((b) => b.reference === parsed.data.reference)) return fail("conflict", "مرجع الدفعة مستعمل مسبقاً.");
+  if (db.batches.some((b) => b.reference === parsed.data.reference)) return fail("conflict", "مرجع العلبة مستعمل مسبقاً.");
   if (!getMember(parsed.data.responsibleId)) return fail("validation", "الموظف المسؤول غير موجود.");
   if (parsed.data.defaultCaseId && !findAccessibleCase(parsed.data.defaultCaseId, db)) return fail("not_found", "القضية غير متاحة.");
   const now = new Date().toISOString();
   const batch: ArchiveBatch = { id: newId("batch"), tenantId: db.tenantId, ...parsed.data, status: "draft", createdAt: now, createdBy: db.currentUserId, updatedAt: now };
   const r = commit((d) =>
     audit({ ...d, batches: [batch, ...d.batches] }, {
-      action: "archive.batch.create", entityType: "batch", entityId: batch.id, summary: `إنشاء دفعة أرشفة ${batch.reference}`, via: "manual",
+      action: "archive.batch.create", entityType: "batch", entityId: batch.id, summary: `إنشاء علبة أرشفة ${batch.reference}`, via: "manual",
     }),
   );
   return r.ok ? { ok: true, data: batch } : fail("storage", r.error);
@@ -94,14 +94,14 @@ export function updateBatch(id: string, patch: Partial<BatchInput>): ApiResult<A
   const denied = guard(db);
   if (denied) return fail("forbidden", denied);
   const batch = db.batches.find((b) => b.id === id && b.tenantId === db.tenantId);
-  if (!batch) return fail("not_found", "الدفعة غير موجودة.");
+  if (!batch) return fail("not_found", "العلبة غير موجودة.");
   const parsed = batchInput.partial().safeParse(patch);
   if (!parsed.success) return fail("validation", parsed.error.issues[0]?.message ?? "بيانات غير صالحة");
-  if (parsed.data.reference && db.batches.some((b) => b.id !== id && b.reference === parsed.data.reference)) return fail("conflict", "مرجع الدفعة مستعمل مسبقاً.");
+  if (parsed.data.reference && db.batches.some((b) => b.id !== id && b.reference === parsed.data.reference)) return fail("conflict", "مرجع العلبة مستعمل مسبقاً.");
   const updated = { ...batch, ...parsed.data, updatedAt: new Date().toISOString() };
   const r = commit((d) =>
     audit({ ...d, batches: d.batches.map((b) => (b.id === id ? updated : b)) }, {
-      action: "archive.batch.update", entityType: "batch", entityId: id, summary: `تعديل بيانات الدفعة ${updated.reference}`, via: "manual",
+      action: "archive.batch.update", entityType: "batch", entityId: id, summary: `تعديل بيانات العلبة ${updated.reference}`, via: "manual",
     }),
   );
   return r.ok ? { ok: true, data: updated } : fail("storage", r.error);
@@ -121,7 +121,7 @@ export function createItem(batchId: string, file: { name: string; type: string; 
   const denied = guard(db);
   if (denied) return fail("forbidden", denied);
   const batch = db.batches.find((b) => b.id === batchId && b.tenantId === db.tenantId);
-  if (!batch) return fail("not_found", "الدفعة غير موجودة.");
+  if (!batch) return fail("not_found", "العلبة غير موجودة.");
   const now = new Date().toISOString();
   const item: ArchiveItem = {
     id: newId("item"),
@@ -139,7 +139,7 @@ export function createItem(batchId: string, file: { name: string; type: string; 
     createdAt: now,
     createdBy: db.currentUserId,
     updatedAt: now,
-    history: [{ at: now, by: db.currentUserId, action: "إضافة الوثيقة إلى الدفعة", to: "draft" }],
+    history: [{ at: now, by: db.currentUserId, action: "إضافة الوثيقة إلى العلبة", to: "draft" }],
   };
   const r = commit((d) => touchBatch({ ...d, archiveItems: [...d.archiveItems, item] }, batchId));
   return r.ok ? { ok: true, data: item } : fail("storage", r.error);
@@ -447,7 +447,7 @@ export function finalizeItems(params: FinalizeParams): ApiResult<{ summary: stri
       action: "archive.finalize",
       entityType: "batch",
       entityId: params.batchId,
-      summary: `أرشفة نهائية لـ${docs.length} وثائق من الدفعة ${d.batches.find((b) => b.id === params.batchId)?.reference ?? ""}`,
+      summary: `أرشفة نهائية لـ${docs.length} وثائق من العلبة ${d.batches.find((b) => b.id === params.batchId)?.reference ?? ""}`,
       via: "manual",
       details: { result: docs.map((x) => x.id).join(",") },
     });

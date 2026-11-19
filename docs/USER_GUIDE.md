@@ -29,7 +29,8 @@ stored on the office server.
    backup recovery codes.
 3. **نسيت كلمة المرور؟** sends a reset link by e-mail — but only if the office has an e-mail server
    configured. Otherwise ask your office administrator to set a new password (Settings → أعضاء المكتب).
-4. Sessions last 12 hours; after that you are asked to sign in again. Ten wrong passwords lock the account
+4. You stay signed in on your device (sessions last a year and renew while you use the app); use «تسجيل الخروج»
+   to leave. Ten wrong passwords lock the account
    for 15 minutes.
 
 ---

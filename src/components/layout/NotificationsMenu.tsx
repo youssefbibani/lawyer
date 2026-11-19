@@ -101,7 +101,7 @@ function BackendNotificationsMenu() {
           <DropdownMenuItem key={h.id} onSelect={() => navigate("/app/agenda")} className="min-h-11 items-start">
             <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-gold-deep" />
             <span className="min-w-0 text-sm">
-              {h.type} — {h.clientName} <span className="text-muted-foreground">({formatRelativeDay(h.date)} {h.time})</span>
+              {h.type} — {h.clientName} <span className="text-muted-foreground">({formatRelativeDay(h.date)})</span>
             </span>
           </DropdownMenuItem>
         ))}

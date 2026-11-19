@@ -74,9 +74,10 @@ export default function Tasks() {
   const list = tasks.data?.items ?? [];
 
   return (
-    <AppShell title="المهام والتذكيرات" subtitle="متابعة أعمال المكتب والآجال">
+    <AppShell title="الأعمال المطلوبة" subtitle="متابعة أعمال المكتب والآجال">
       <div className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        {/* Buttons first (right), filters on the left. */}
+        <div className="flex flex-wrap items-end justify-between gap-3 sm:flex-row-reverse">
           <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto">
             <div className="min-w-0 sm:w-48">
               <Select value={assignee} onValueChange={setAssignee}>
@@ -165,7 +166,7 @@ export default function Tasks() {
               ) : (
                 <ul className="space-y-3">
                   {list.map((t) => (
-                    <TaskItem key={t.id} task={t} highlighted={t.id === focus} onToggle={actions.toggle} onEdit={actions.openEdit} onDelete={actions.setDeleting} />
+                    <TaskItem key={t.id} task={t} highlighted={t.id === focus} finishing={actions.isFinishing(t.id)} onToggle={actions.toggle} onEdit={actions.openEdit} onDelete={actions.setDeleting} />
                   ))}
                 </ul>
               )}

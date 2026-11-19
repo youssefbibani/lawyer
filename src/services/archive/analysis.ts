@@ -94,7 +94,7 @@ export function extractFields(pages: PageInput[], cases: LegalCase[]): Extracted
   for (const [rx, strength, fmt] of refPatterns) {
     const hit = firstMatch(rx);
     if (hit) {
-      fields.push({ key: "caseRef", label: "مرجع القضية", value: fmt(hit.m), confidence: spanConfidence(hit.m[0], pages[hit.page], strength), source: "rule", evidence: hit.m[0], page: hit.page + 1 });
+      fields.push({ key: "caseRef", label: "عدد القضية", value: fmt(hit.m), confidence: spanConfidence(hit.m[0], pages[hit.page], strength), source: "rule", evidence: hit.m[0], page: hit.page + 1 });
       break;
     }
   }

@@ -17,20 +17,23 @@ interface TaskItemProps {
   onDelete: (task: TaskDTO) => void;
   highlighted?: boolean;
   showCase?: boolean;
+  /** Ticked just now: shown done (green) while the lists refresh. */
+  finishing?: boolean;
 }
 
-/** Delivery state as recorded by the server — never assumed. */
+/** Delivery state as recorded by the server — never assumed. Without a time, alerts go out at 08:00. */
 function channelStatus(task: TaskDTO): string[] {
   const parts: string[] = [];
+  if (!task.dueDate) return parts;
   const latest = (channel: "IN_APP" | "EMAIL") => [...task.reminders].reverse().find((r) => r.channel === channel && r.status !== "CANCELLED");
+  const at = task.dueTime ? "" : " (الساعة 08:00)";
   if (task.notifyInApp) {
     const r = latest("IN_APP");
-    parts.push(!task.dueTime ? "داخل التطبيق: حدّد ساعة للتنبيه" : r?.status === "SENT" ? "ظهر داخل التطبيق" : "مجدول داخل التطبيق");
+    parts.push(r?.status === "SENT" ? "ظهر داخل التطبيق" : `تنبيه داخل التطبيق${at}`);
   }
   if (task.notifyEmail) {
     const r = latest("EMAIL");
-    if (!task.dueTime) parts.push("البريد: حدّد ساعة للتنبيه");
-    else if (!r || r.status === "PENDING") parts.push("البريد: مجدول");
+    if (!r || r.status === "PENDING") parts.push(`البريد: مجدول${at}`);
     else if (r.status === "SENT") parts.push("البريد: أُرسل");
     else if (r.status === "NOT_CONFIGURED") parts.push("البريد: لم يُرسل (خدمة البريد غير مهيأة)");
     else if (r.status === "FAILED") parts.push("البريد: فشل الإرسال");
@@ -46,8 +49,8 @@ const initials = (name: string) =>
     .map((p) => p.replace(/^ال/, "")[0])
     .join(".");
 
-export function TaskItem({ task, onToggle, onEdit, onDelete, highlighted, showCase = true }: TaskItemProps) {
-  const completed = task.status === "DONE";
+export function TaskItem({ task, onToggle, onEdit, onDelete, highlighted, showCase = true, finishing = false }: TaskItemProps) {
+  const completed = task.status === "DONE" || finishing;
   const overdue = !completed && !!task.dueDate && task.dueDate < todayISO();
   const checkboxId = `task-done-${task.id}`;
   const recurrence = toUiRecurrence(task.recurrence);
@@ -56,13 +59,18 @@ export function TaskItem({ task, onToggle, onEdit, onDelete, highlighted, showCa
   return (
     <li
       id={`task-${task.id}`}
-      className={cn("card-elevated flex items-start gap-2 p-3 transition-colors sm:gap-3 sm:p-4", highlighted && "border-gold ring-2 ring-gold/40", completed && "opacity-70")}
+      className={cn(
+        "card-elevated flex items-start gap-2 p-3 transition-[colors,opacity] duration-700 sm:gap-3 sm:p-4",
+        highlighted && "border-gold ring-2 ring-gold/40",
+        finishing ? "border-success/50 bg-success/5 opacity-60" : completed && "opacity-70",
+      )}
     >
       <label htmlFor={checkboxId} className="-m-1 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)]">
         <input
           id={checkboxId}
           type="checkbox"
           checked={completed}
+          disabled={finishing}
           onChange={(e) => onToggle(task, e.target.checked)}
           className="peer sr-only"
           aria-label={completed ? `إعادة فتح: ${task.title}` : `إنجاز: ${task.title}`}

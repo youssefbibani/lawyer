@@ -42,7 +42,7 @@ import type { ArchiveCategory, ArchiveItem, ArchivePage, ExtractedField } from "
 
 const FIELD_DEFS: { key: ExtractedField["key"]; label: string; type: "text" | "date" }[] = [
   { key: "title", label: "عنوان الوثيقة", type: "text" },
-  { key: "caseRef", label: "مرجع القضية", type: "text" },
+  { key: "caseRef", label: "عدد القضية", type: "text" },
   { key: "date", label: "التاريخ", type: "date" },
   { key: "court", label: "المحكمة", type: "text" },
   { key: "parties", label: "الأطراف", type: "text" },

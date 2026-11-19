@@ -2,6 +2,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 
 import type {
+  AppointmentDTO,
   AuditEntryDTO,
   CaseDetailDTO,
   CaseNoteDTO,
@@ -83,6 +84,11 @@ export const useCaseNotes = (id: string | undefined) =>
 export const useCaseTimeline = (id: string | undefined) =>
   useQuery({ queryKey: ["case", id, "timeline"], queryFn: ({ signal }) => api.get<TimelineEntryDTO[]>(`/cases/${id}/timeline`, signal), enabled: !!id });
 
+// ——— Client appointments ———
+
+export const useAppointments = (p: Params = {}, enabled = true) =>
+  useQuery({ queryKey: ["appointments", p], queryFn: ({ signal }) => api.get<Paginated<AppointmentDTO>>(`/appointments${qs(p)}`, signal), placeholderData: keepPreviousData, enabled });
+
 // ——— Hearings ———
 
 export const useHearings = (p: Params = {}, enabled = true) =>
@@ -144,6 +150,7 @@ const AFFECTS = {
   finance: [["fees"], ["fee"], ["fees-totals"], ["receipt"], ["dashboard"], ["case"]],
   tasks: [["tasks"], ["task-summary"], ["task-conflicts"], ["dashboard"], ["inbox"], ["case"]],
   clients: [["clients"], ["client"], ["cases"], ["case"]],
+  appointments: [["appointments"], ["dashboard"]],
   settings: [["settings"], ["me"], ["members"], ["settings-members"], ["audit"], ["sessions"]],
 } satisfies Record<string, QueryKey[]>;
 
