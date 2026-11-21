@@ -93,3 +93,8 @@ export const RECURRENCE_LABELS: Record<TaskRecurrence, string> = {
   weekly: "أسبوعياً",
   monthly: "شهرياً",
 };
+
+/** Display label for a demo-store case status: active cases are shown as «منشورة» (the office's term). */
+export function caseStatusLabel(status: CaseStatus): string {
+  return status === "نشطة" ? "منشورة" : status;
+}

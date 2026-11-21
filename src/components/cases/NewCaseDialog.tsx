@@ -66,7 +66,7 @@ export function NewCaseDialog({ open, onOpenChange, defaultClientId }: { open: b
     const created = await api.post<CaseDetailDTO>("/cases", {
       reference: v.reference.trim(),
       type: v.type,
-      // A new case is always active («قضية جديدة = قضية نشطة»).
+      // A new case is always active («قضية جديدة = قضية منشورة»).
       status: "ACTIVE",
       court: v.court.trim(),
       description: v.description.trim() || null,

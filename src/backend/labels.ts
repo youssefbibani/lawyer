@@ -25,7 +25,7 @@ export const CASE_TYPE_LABELS: Record<CaseType, string> = {
   OTHER: "أخرى",
 };
 
-export const CASE_STATUS_LABELS: Record<CaseStatus, string> = { ACTIVE: "نشطة", POSTPONED: "مؤجلة", CLOSED: "منتهية" };
+export const CASE_STATUS_LABELS: Record<CaseStatus, string> = { ACTIVE: "منشورة", POSTPONED: "مؤجلة", CLOSED: "منتهية" };
 
 export function caseStatusToneOf(status: CaseStatus): StatusTone {
   return status === "ACTIVE" ? "success" : status === "POSTPONED" ? "gold" : "neutral";

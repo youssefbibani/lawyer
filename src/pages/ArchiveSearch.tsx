@@ -332,7 +332,7 @@ export default function ArchiveSearch() {
                         {can(user, "case:link") && (
                           <Button size="sm" variant="outline" onClick={() => setActiveResult(hit)}>
                             <Link2 className="h-4 w-4" />
-                            ربط بقضية نشطة
+                            ربط بقضية منشورة
                           </Button>
                         )}
                       </div>
@@ -348,8 +348,8 @@ export default function ArchiveSearch() {
       <Dialog open={!!activeResult && !linkCase} onOpenChange={(o) => !o && setActiveResult(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>ربط بقضية نشطة</DialogTitle>
-            <DialogDescription>اختر القضية النشطة التي تريد ربط وثيقة {activeResult?.document.caseRef} بها.</DialogDescription>
+            <DialogTitle>ربط بقضية منشورة</DialogTitle>
+            <DialogDescription>اختر القضية المنشورة التي تريد ربط وثيقة {activeResult?.document.caseRef} بها.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             {accessibleCases(db, user)

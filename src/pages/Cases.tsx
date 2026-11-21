@@ -24,7 +24,7 @@ type Filter = CaseStatus | "ALL" | "ARCHIVE";
 /** «منتهية» = closed less than a month ago; after that a closed case moves to «الأرشيف». */
 const FILTERS: { label: string; value: Filter; hint?: string }[] = [
   { label: "الكل", value: "ALL" },
-  { label: "نشطة", value: "ACTIVE" },
+  { label: "منشورة", value: "ACTIVE" },
   { label: "مؤجلة", value: "POSTPONED" },
   { label: "منتهية", value: "CLOSED", hint: "تنتقل إلى الأرشيف بعد شهر من ختمها" },
   { label: "الأرشيف", value: "ARCHIVE", hint: "القضايا المنتهية منذ أكثر من شهر" },

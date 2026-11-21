@@ -399,7 +399,7 @@ export default function DocumentViewer() {
           {can(user, "case:link") && linkableCases.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>ربط بقضية نشطة</CardTitle>
+                <CardTitle>ربط بقضية منشورة</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Select value={linkTarget} onValueChange={setLinkTarget}>

@@ -183,11 +183,11 @@ export default function Dashboard() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>قضايا نشطة</CardTitle>
+                  <CardTitle>قضايا منشورة</CardTitle>
                   <CardDescription>أحدث الملفات قيد المتابعة</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {d.recentCases.length === 0 && <p className="text-sm text-muted-foreground">لا توجد قضايا نشطة.</p>}
+                  {d.recentCases.length === 0 && <p className="text-sm text-muted-foreground">لا توجد قضايا منشورة.</p>}
                   {d.recentCases.map((c) => (
                     <button
                       key={c.id}

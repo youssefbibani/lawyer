@@ -15,6 +15,7 @@ import { formatArabicDate } from "@/lib/formatters";
 import { getDB, newId, type DemoDatabase } from "@/services/db";
 import { currentUser, documentsForCase, findAccessibleCase, hearingsForCase, nextHearingForCase } from "@/services/api";
 import { detectInjection, searchDocuments } from "@/services/retrieval";
+import { caseStatusLabel } from "@/lib/status";
 
 export const BRIEF_SECTIONS: { key: string; title: string }[] = [
   { key: "file", title: "ملف القضية" },
@@ -122,7 +123,7 @@ export function generateBrief(
   // 1. Case file (from the case record).
   sections.file.push(
     item("source", `المرجع ${legalCase.ref} — ${legalCase.type} — ${legalCase.court}.`),
-    item("source", `الحريف: ${legalCase.client}. الحالة: ${legalCase.status}. المحامي المكلّف: ${legalCase.assignedLawyer}.`),
+    item("source", `الحريف: ${legalCase.client}. الحالة: ${caseStatusLabel(legalCase.status)}. المحامي المكلّف: ${legalCase.assignedLawyer}.`),
   );
   if (hearing) {
     sections.file.push(

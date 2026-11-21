@@ -11,7 +11,7 @@ import type { Hearing, LegalCase, TeamMember } from "@/types";
 import { normalizeText } from "@/lib/arabic";
 import { addDays, parseISODate, startOfDay, toISODate, urgencyOf } from "@/lib/dates";
 import { formatArabicDate, formatCurrency } from "@/lib/formatters";
-import { urgencyLabelOf, urgencyToneOf } from "@/lib/status";
+import { caseStatusLabel, urgencyLabelOf, urgencyToneOf } from "@/lib/status";
 import { getDB, newId, type DemoDatabase } from "@/services/db";
 import {
   accessibleCases,
@@ -288,7 +288,7 @@ function caseList(list: LegalCase[], db: DemoDatabase, user: TeamMember, now: Da
         subtitle: c.court,
         meta: `${c.ref}${next ? ` • الجلسة القادمة ${formatArabicDate(next.date)}` : ""}`,
         href: `/app/cases/${c.id}`,
-        badge: { label: c.status, tone: c.status === "نشطة" ? "success" : c.status === "مؤجلة" ? "gold" : "neutral" },
+        badge: { label: caseStatusLabel(c.status), tone: c.status === "نشطة" ? "success" : c.status === "مؤجلة" ? "gold" : "neutral" },
       };
     }),
   };
@@ -328,7 +328,7 @@ function summarizeCase(resolution: CaseResolution, db: DemoDatabase, user: TeamM
   blocks.push({ type: "notice", tone: "info", text: "هذا الملخص مبني حصرياً على بيانات الملف ووثائقه المتاحة لك؛ لا يتضمن أي استنتاج قانوني." });
   return {
     intent: "summarize_case",
-    text: `ملخص ملف ${c.client} (${c.ref}) — ${c.type} أمام ${c.court}. الحالة: ${c.status}.${next ? ` الجلسة القادمة: ${next.type} يوم ${formatArabicDate(next.date)} على الساعة ${next.time}.` : " لا توجد جلسة قادمة مبرمجة."}`,
+    text: `ملخص ملف ${c.client} (${c.ref}) — ${c.type} أمام ${c.court}. الحالة: ${caseStatusLabel(c.status)}.${next ? ` الجلسة القادمة: ${next.type} يوم ${formatArabicDate(next.date)} على الساعة ${next.time}.` : " لا توجد جلسة قادمة مبرمجة."}`,
     blocks,
     memory: { lastCaseId: c.id, lastHearingId: next?.id },
   };
