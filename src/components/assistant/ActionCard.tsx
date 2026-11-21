@@ -179,7 +179,7 @@ export function ActionCard({ action, onChange, onConfirm, onCancel }: ActionCard
                     {dateTime()}
                     <div className="grid grid-cols-1 gap-2 xs:grid-cols-2">
                       <div className="space-y-1">
-                        <Label htmlFor={`${idp}-type`}>نوع الجلسة</Label>
+                        <Label htmlFor={`${idp}-type`}>موضوع الجلسة</Label>
                         <Input id={`${idp}-type`} value={f.hearingType ?? ""} onChange={(e) => setField("hearingType", e.target.value)} disabled={!editable} />
                       </div>
                       <div className="space-y-1">

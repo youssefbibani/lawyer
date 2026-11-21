@@ -48,8 +48,8 @@ a role.
 | **Members** (add, change role, deactivate, set a new password) | ✓ | — | — |
 | **Office audit log** | ✓ | — | — |
 
-In numbers: an administrator holds 18 permissions, a lawyer 15, a clerk 8 (10 if the office lets clerks
-record payments). When an action is refused the interface shows an Arabic message naming the rule, for
+In numbers: an administrator holds 18 permissions, a lawyer 15, a clerk 8. Clerks (secretaries) never have
+access to fees. When an action is refused the interface shows an Arabic message naming the rule, for
 example «تغيير حالة القضية مقصور على المحامين ومدير المكتب».
 
 ## 3. Which files a person sees
@@ -61,7 +61,6 @@ office's rules, set by the administrator in **Settings → المكتب**:
 |---|:-:|---|
 | المحامون يرون كل ملفات المكتب — lawyers see all files | on | Off: a lawyer sees only files assigned to them or where they are on the staff. |
 | الكتبة يرون كل ملفات المكتب — clerks see all files | off | Off: a clerk sees only files where they are on the staff. |
-| الكتبة يسجّلون الدفعات — clerks may record payments | off | On: clerks can see finances, record payments and issue receipts (not void them). |
 
 - **Administrators** always see every file of their own office — and nothing of any other office.
 - Related data follows the file: a file's **hearings, fees, payments and receipts** are visible exactly
@@ -80,7 +79,7 @@ work:
 | هالة الماجري (administrator) | All 6 files of the first office, including the confidential one; all fees; members; audit log. Nothing of the second office. |
 | منير العياري (lawyer) | The 5 files assigned to him. **Not** the confidential file `CC/2025/0977`. |
 | سلمى الحداد (lawyer) | `CC/2025/0398` (she is on its staff) and her own confidential file `CC/2025/0977`. |
-| أمينة الزواري (clerk) | The 5 files where she is on the staff. No fees (the clerk payment rule is off). Not the confidential file. |
+| أمينة الزواري (clerk) | The 5 files where she is on the staff. No fees (secretaries never see fees). Not the confidential file. |
 | ريم الشريف (administrator, second office) | Only her office's single file. It has the same reference as a file in the other office (`CC/2025/0124`) — references are unique per office, and the two never mix. |
 
 ## 4. Managing members (administrator)

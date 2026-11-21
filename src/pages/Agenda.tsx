@@ -12,8 +12,10 @@ import { SkeletonCards } from "@/components/shared/LoadingSkeleton";
 import { HearingDialog } from "@/components/hearings/HearingDialog";
 import { MonthCalendar } from "@/components/hearings/MonthCalendar";
 import { HearingActions } from "@/components/hearings/HearingActions";
+import { WeekBoard, mondayOf, BOARD_DAYS } from "@/components/hearings/WeekBoard";
 import { TaskDialog, type TaskDefaults } from "@/components/tasks/TaskDialog";
 import { useIsCompact } from "@/hooks/use-media-query";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { urgencyLabelOf, urgencyToneOf } from "@/lib/status";
 import { formatArabicDate } from "@/lib/formatters";
 import { ARABIC_WEEKDAYS, ARABIC_WEEKDAYS_SHORT, addDays, parseISODate, startOfDay, toISODate, urgencyOf } from "@/lib/dates";
@@ -37,17 +39,22 @@ export default function Agenda() {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const listRef = useRef<HTMLDivElement>(null);
   const [reminderDefaults, setReminderDefaults] = useState<TaskDefaults | undefined>();
+  /** "week": the lawyers' weekly board (default). "month": the month calendar. */
+  const [view, setView] = useLocalStorage<"week" | "month">("qasr-al-adala:agenda-view", "week");
+  const weekView = view !== "month";
+  const [boardWeek, setBoardWeek] = useState(() => mondayOf(new Date()));
+  const [addDate, setAddDate] = useState<string>();
 
   const today = toISODate(new Date());
-  // Default window (-90d…+1y), widened to whatever month the calendar is showing.
+  // Default window (-90d…+1y), widened to whatever month or week is on screen.
   const range = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-    const from = new Date(Math.min(addDays(now, -90).getTime(), monthStart.getTime()));
-    const to = new Date(Math.max(addDays(now, 365).getTime(), monthEnd.getTime()));
+    const from = new Date(Math.min(addDays(now, -90).getTime(), monthStart.getTime(), boardWeek.getTime()));
+    const to = new Date(Math.max(addDays(now, 365).getTime(), monthEnd.getTime(), addDays(boardWeek, BOARD_DAYS).getTime()));
     return { from: toISODate(from), to: toISODate(to) };
-  }, [month]);
+  }, [month, boardWeek]);
   const hearingsQuery = useHearings(range);
   const hearings = useMemo(() => hearingsQuery.data?.items ?? [], [hearingsQuery.data]);
   const scheduled = useMemo(() => hearings.filter((h) => h.status === "SCHEDULED"), [hearings]);
@@ -95,24 +102,70 @@ export default function Agenda() {
   );
 
   return (
-    <AppShell title="المفكرة الذكية" subtitle="جلسات المحاكم وتذكيرات المواعيد (بتوقيت تونس)">
+    <AppShell title="المفكرة الذكية" subtitle="جلسات المحاكم أسبوعاً بأسبوع">
       <div className="space-y-5 sm:space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {compact && (
+          <div role="radiogroup" aria-label="طريقة العرض" className="inline-flex h-10 rounded-[var(--radius)] border border-border bg-secondary/60 p-0.5 coarse:h-11">
+            {(
+              [
+                ["week", "أسبوع"],
+                ["month", "شهر"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={(weekView ? "week" : "month") === v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "rounded-[calc(var(--radius)-2px)] px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  (weekView ? "week" : "month") === v ? "bg-card font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {compact && !weekView && (
             <Button variant="outline" onClick={() => setShowMonth((s) => !s)} aria-expanded={showMonth}>
               <CalendarDays className="h-4 w-4" />
               {showMonth ? "إخفاء الشهر" : "عرض الشهر"}
             </Button>
           )}
           {can("hearing:write") && (
-            <Button onClick={() => setDialogOpen(true)} className={compact ? "flex-1" : "mr-auto"}>
+            <Button
+              onClick={() => {
+                setAddDate(undefined);
+                setDialogOpen(true);
+              }}
+              className={compact ? "flex-1" : "mr-auto"}
+            >
               <CalendarPlus className="h-4 w-4" />
               إضافة جلسة
             </Button>
           )}
         </div>
 
-        {compact && (
+        {weekView && (
+          <WeekBoard
+            weekStart={boardWeek}
+            onWeekChange={setBoardWeek}
+            hearings={hearings}
+            loading={hearingsQuery.isPending}
+            error={hearingsQuery.error?.message}
+            onRetry={() => void hearingsQuery.refetch()}
+            canAdd={can("hearing:write")}
+            onAdd={(date) => {
+              setAddDate(date);
+              setDialogOpen(true);
+            }}
+            canRemind={can("task:write")}
+            onRemind={remindFor}
+          />
+        )}
+
+        {!weekView && compact && (
           <div className="card-elevated p-3">
             <div className="mb-2 flex items-center justify-between">
               <Button variant="ghost" size="icon" aria-label="الأسبوع السابق" onClick={() => setWeekStart((w) => addDays(w, -7))}>
@@ -156,9 +209,10 @@ export default function Agenda() {
           </div>
         )}
 
-        {compact && showMonth && monthCalendar}
+        {!weekView && compact && showMonth && monthCalendar}
 
-        {/* Calendar on the start side (right in RTL); upcoming hearings + reminder settings beside it on the left. */}
+        {/* Calendar on the start side (right in RTL); upcoming hearings beside it on the left. */}
+        {!weekView && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem] xl:grid-cols-[minmax(0,1fr)_19rem]">
           {!compact && monthCalendar}
 
@@ -234,9 +288,10 @@ export default function Agenda() {
 
           </div>
         </div>
+        )}
       </div>
 
-      <HearingDialog open={dialogOpen} onOpenChange={setDialogOpen} defaultDate={selectedDate ? toISODate(selectedDate) : undefined} />
+      <HearingDialog open={dialogOpen} onOpenChange={setDialogOpen} defaultDate={addDate ?? (selectedDate ? toISODate(selectedDate) : undefined)} />
       <TaskDialog open={!!reminderDefaults} onOpenChange={(o) => !o && setReminderDefaults(undefined)} defaults={reminderDefaults} />
     </AppShell>
   );

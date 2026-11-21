@@ -39,6 +39,37 @@ describe("fee agreements and balances", () => {
     expect(last.body.agreement).toMatchObject({ remaining: "0.000", settlement: "PAID", status: "SETTLED" });
   });
 
+  it("adds 19% VAT on top of the HT amount: totals, rounding, overpayment guard and receipt split", async () => {
+    const c = await createCaseFor(office);
+    const res = await lawyer.post("/fees", { caseId: c.id, amount: "3500", vatRate: 19, title: "أتعاب" });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ amount: "3500.000", vatRate: 19, vat: "665.000", total: "4165.000", remaining: "4165.000", settlement: "UNPAID" });
+    // Rounding to the millime: 0.001 HT + 19% = 0.00119 → 0.001.
+    const tiny = (await lawyer.post("/fees", { caseId: (await createCaseFor(office)).id, amount: "10.005", vatRate: 19 })).body;
+    expect(tiny).toMatchObject({ vat: "1.901", total: "11.906" });
+    // Payments are VAT included: the guard is against the TTC total.
+    expect((await pay(res.body.id, "4165.001")).body.error.code).toBe("OVERPAYMENT");
+    const first = await pay(res.body.id, "1190");
+    expect(first.status).toBe(201);
+    const receipt = await prisma.receipt.findUniqueOrThrow({ where: { id: first.body.payment.receipt.id }, select: { snapshot: true } });
+    expect(receipt.snapshot).toMatchObject({
+      payment: { amount: "1190.000", vat: { rate: 19, ht: "1000.000", vat: "190.000" } },
+      agreement: { amount: "4165.000", ht: "3500.000", vatRate: 19, remainingAfter: "2975.000" },
+    });
+    const last = await pay(res.body.id, "2975");
+    expect(last.body.agreement).toMatchObject({ paid: "4165.000", remaining: "0.000", settlement: "PAID", status: "SETTLED" });
+    // Only Tunisian rates are accepted.
+    expect((await lawyer.post("/fees", { caseId: c.id, amount: "10", vatRate: 20 })).status).toBe(422);
+  });
+
+  it("leaves agreements without VAT unchanged (old agreements and exempt fees)", async () => {
+    const fee = await newAgreement("500");
+    expect(fee).toMatchObject({ amount: "500.000", vatRate: 0, vat: "0.000", total: "500.000", remaining: "500.000" });
+    const r = await pay(fee.id, "500");
+    const receipt = await prisma.receipt.findUniqueOrThrow({ where: { id: r.body.payment.receipt.id }, select: { snapshot: true } });
+    expect((receipt.snapshot as { payment: { vat?: unknown } }).payment.vat).toBeUndefined();
+  });
+
   it("validates amounts and currency", async () => {
     const c = await createCaseFor(office);
     for (const amount of ["0", "-5", "1.2345", "abc", "", 12.5e20]) {

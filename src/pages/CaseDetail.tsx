@@ -103,7 +103,7 @@ export default function CaseDetail() {
     if (!active.length) return null;
     const currency = active[0].currency;
     const sameCurrency = active.filter((f) => f.currency === currency);
-    const agreed = sumMoney(sameCurrency.map((f) => f.amount));
+    const agreed = sumMoney(sameCurrency.map((f) => f.total));
     const paid = sumMoney(sameCurrency.map((f) => f.paid));
     const remaining = sumMoney(sameCurrency.map((f) => f.remaining));
     const settlement: SettlementStatus = isZeroOrLess(remaining) ? "PAID" : !isZeroOrLess(paid) ? "PARTIAL" : "UNPAID";
@@ -331,7 +331,7 @@ export default function CaseDetail() {
                     {hearings.data.items.map((h) => {
                       const urgency = urgencyOf(h.date);
                       return (
-                        <li key={h.id} className={cn("card-elevated flex flex-wrap items-center justify-between gap-3 p-4 sm:flex-row-reverse", h.status !== "SCHEDULED" && "opacity-75")}>
+                        <li key={h.id} className={cn("card-elevated flex flex-wrap items-center justify-between gap-3 p-4", h.status !== "SCHEDULED" && "opacity-75")}>
                           <div className="min-w-0">
                             <p className="text-sm font-medium">{h.type}</p>
                             <p className="text-xs text-muted-foreground">

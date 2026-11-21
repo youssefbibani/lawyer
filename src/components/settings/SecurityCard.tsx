@@ -10,9 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import { copyToClipboard } from "@/lib/print";
 import { api } from "@/backend/http";
 import { changePassword, confirmTwoFactor, disableTwoFactor, enableTwoFactor, PASSWORD_MIN, revokeOtherSessions } from "@/backend/auth";
@@ -29,7 +27,6 @@ export function SecurityCard() {
   const queryClient = useQueryClient();
   const { data: me } = useMe();
   const sessions = useSessions();
-  const [autoLock, setAutoLock] = useLocalStorage("qasr-al-adala:autolock", "15");
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [pw, setPw] = useState({ current: "", next: "", confirm: "", revoke: true });
   const [pwError, setPwError] = useState<string>();
@@ -109,22 +106,14 @@ export function SecurityCard() {
           <Switch checked={twoFactorEnabled} onCheckedChange={(v) => setTwoFactor({ step: v ? "password" : "disable", password: "", code: "" })} aria-label="المصادقة الثنائية" />
         </div>
         <Separator />
-        <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
+        <div className="flex min-h-11 items-start gap-2">
+          <LogOut className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm">
-            قفل التطبيق بعد فترة خمول
-            <span className="block text-xs text-muted-foreground">تفضيل على هذا الجهاز؛ تنتهي الجلسة على الخادم بعد 12 ساعة دون نشاط.</span>
+            البقاء متصلاً
+            <span className="block text-xs text-muted-foreground">
+              تبقى متصلاً على هذا الجهاز ما دمت تستعمل المنصة (حتى سنة). على جهاز مشترك، استعمل «تسجيل الخروج» عند الانتهاء، أو أنهِ الجلسات الأخرى أدناه.
+            </span>
           </span>
-          <Select value={autoLock} onValueChange={setAutoLock}>
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="5">5 دقائق</SelectItem>
-              <SelectItem value="15">15 دقيقة</SelectItem>
-              <SelectItem value="30">30 دقيقة</SelectItem>
-              <SelectItem value="never">بدون قفل</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
         <Separator />
         <div className="space-y-2">

@@ -101,6 +101,13 @@ function mapBrowserError(error: string): SttErrorCode | null {
   }
 }
 
+/** Silent restarts allowed in a row (no speech heard in between) before dictation ends by itself (~1–2 min). */
+export const MAX_SILENT_RESTARTS = 10;
+/** Network drops tolerated (each followed by a restart) during one dictation. */
+export const MAX_NETWORK_RETRIES = 2;
+/** If the browser never reports the end after stop(), finish anyway after this delay. */
+const STOP_FALLBACK_MS = 3000;
+
 export class BrowserSpeechProvider implements SpeechToTextProvider {
   id = "browser" as const;
   label = "التعرّف على الصوت عبر المتصفح";
@@ -108,11 +115,39 @@ export class BrowserSpeechProvider implements SpeechToTextProvider {
 
   constructor(private readonly Ctor: RecognitionCtor, private readonly lang = config.speechLanguage) {}
 
+  /**
+   * Dictation lasts until the user presses stop. Browsers (Chrome especially) end a "continuous"
+   * recognition on their own after a few seconds of silence or about a minute of speech, and may
+   * drop the connection to their speech service: those ends are bridged by restarting silently.
+   * Words still pending (interim) when the user stops are kept, not thrown away.
+   */
   start(cb: SttCallbacks): SttSession {
     let recognition: RecognitionLike | null = null;
     let paused = false;
+    let stopRequested = false;
     let finished = false;
     let cancelled = false;
+    let lastInterim = "";
+    let silentRestarts = 0;
+    let networkRetries = 0;
+    let stopFallback: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = () => {
+      if (finished || cancelled) return;
+      finished = true;
+      clearTimeout(stopFallback);
+      if (lastInterim) cb.onFinal(lastInterim);
+      lastInterim = "";
+      cb.onEnd();
+    };
+
+    const fail = (code: SttErrorCode) => {
+      if (finished || cancelled) return;
+      finished = true;
+      clearTimeout(stopFallback);
+      recognition?.abort();
+      cb.onError(code);
+    };
 
     const launch = () => {
       const r = new this.Ctor();
@@ -120,55 +155,73 @@ export class BrowserSpeechProvider implements SpeechToTextProvider {
       r.continuous = true;
       r.interimResults = true;
       r.onresult = (e) => {
+        silentRestarts = 0;
         let interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const res = e.results[i];
           if (res.isFinal) cb.onFinal(res[0].transcript.trim());
           else interim += res[0].transcript;
         }
-        cb.onInterim(interim.trim());
+        lastInterim = interim.trim();
+        cb.onInterim(lastInterim);
       };
       r.onerror = (e) => {
-        const code = mapBrowserError(e.error);
-        if (code && !cancelled) {
-          finished = true;
-          cb.onError(code);
+        if (cancelled || finished) return;
+        // Silence is normal while dictating: the session simply restarts in onend.
+        if (e.error === "no-speech" || e.error === "aborted") return;
+        if (e.error === "network" && !stopRequested && networkRetries < MAX_NETWORK_RETRIES) {
+          networkRetries++;
+          return; // restarted in onend
         }
+        const code = mapBrowserError(e.error);
+        if (code) fail(code);
       };
       r.onend = () => {
-        if (cancelled) return;
-        if (paused) return; // paused: keep the session open for resume()
-        if (!finished) {
-          finished = true;
-          cb.onEnd();
+        if (cancelled || finished || paused) return; // paused: resume() relaunches
+        if (stopRequested) return finish();
+        // Ended by the browser, not the user: keep listening.
+        if (lastInterim) {
+          cb.onFinal(lastInterim);
+          lastInterim = "";
         }
+        if (silentRestarts++ >= MAX_SILENT_RESTARTS) return finish();
+        launch();
       };
       recognition = r;
-      r.start();
+      try {
+        r.start();
+      } catch {
+        fail("failed");
+      }
     };
 
     launch();
     return {
       pause() {
+        if (finished) return;
         paused = true;
         recognition?.stop();
       },
       resume() {
-        if (!paused) return;
+        if (!paused || finished) return;
         paused = false;
+        silentRestarts = 0;
         launch();
       },
       stop() {
+        if (finished) return;
+        stopRequested = true;
         if (paused) {
           paused = false;
-          finished = true;
-          cb.onEnd();
+          finish();
           return;
         }
         recognition?.stop();
+        stopFallback = setTimeout(finish, STOP_FALLBACK_MS);
       },
       cancel() {
         cancelled = true;
+        clearTimeout(stopFallback);
         recognition?.abort();
       },
     };

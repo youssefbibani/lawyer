@@ -29,13 +29,15 @@ const LAWYER: Permission[] = [
   "task:write",
 ];
 
-/** Clerks prepare work: no case status / lawyer changes, no hearing cancellation, no finance by default. */
+/** Clerks prepare work: no case status / lawyer changes, no hearing cancellation, and never any finance. */
 const CLERK: Permission[] = ["client:read", "client:write", "case:read", "case:create", "case:update", "note:write", "hearing:write", "task:write"];
 
-export function permissionsFor(role: Role, office: Actor["office"]): Permission[] {
+export function permissionsFor(role: Role, _office: Actor["office"]): Permission[] {
   if (role === "admin") return [...PERMISSIONS];
   if (role === "lawyer") return LAWYER;
-  return office.clerksCanRecordPayments ? [...CLERK, "finance:read", "payment:record"] : CLERK;
+  // Secretaries have no access to fees at all: the former office switch (clerksCanRecordPayments)
+  // no longer grants anything. `_office` stays in the signature for office-level rules.
+  return CLERK;
 }
 
 export function can(actor: Actor, permission: Permission): boolean {

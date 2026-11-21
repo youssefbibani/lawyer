@@ -14,7 +14,7 @@ import type {
   SettlementStatus,
   TaskDTO,
 } from "../../shared/api.js";
-import { Decimal, money, sum } from "../lib/money.js";
+import { Decimal, money, sum, withVat } from "../lib/money.js";
 import { formatDateOnly, utcToZoned } from "../lib/time.js";
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
@@ -136,7 +136,8 @@ export function settlementOf(amount: Decimal, paid: Decimal): SettlementStatus {
 
 export function agreementDTO(a: AgreementRow): FeeAgreementDTO {
   const paid = sum(a.payments.map((p) => p.amount));
-  const remaining = Decimal.max(new Decimal(a.amount).minus(paid), 0);
+  const total = withVat(a.amount, a.vatRate);
+  const remaining = Decimal.max(total.minus(paid), 0);
   const last = a.payments.reduce<Date | null>((acc, p) => (!acc || p.paidOn > acc ? p.paidOn : acc), null);
   return {
     id: a.id,
@@ -145,12 +146,15 @@ export function agreementDTO(a: AgreementRow): FeeAgreementDTO {
     client: a.client,
     title: a.title,
     amount: money(a.amount),
+    vatRate: Number(a.vatRate),
+    vat: money(total.minus(a.amount)),
+    total: money(total),
     currency: a.currency,
     paymentTerms: a.paymentTerms,
     status: a.status,
     paid: money(paid),
     remaining: money(remaining),
-    settlement: settlementOf(new Decimal(a.amount), paid),
+    settlement: settlementOf(total, paid),
     lastPaymentOn: last ? formatDateOnly(last) : null,
     paymentCount: a._count.payments,
     version: a.version,

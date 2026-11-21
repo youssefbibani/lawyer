@@ -18,8 +18,10 @@ export interface ReceiptSnapshot {
   office: { legalName: string; address: string | null; city: string | null; phone: string | null; email: string | null; taxId: string | null; barRegistration: string | null };
   client: { fullName: string; nationalId: string | null } | null;
   case: { reference: string; court: string };
-  payment: { amount: string; currency: string; paidOn: string; method: string; reference: string | null; notes: string | null };
-  agreement: { title: string | null; amount: string; paidAfter: string; remainingAfter: string };
+  /** `vat` is present when the fees are subject to VAT: the split of this payment. */
+  payment: { amount: string; currency: string; paidOn: string; method: string; reference: string | null; notes: string | null; vat?: { rate: number; ht: string; vat: string } };
+  /** `amount` is the total due (VAT included); `ht`/`vatRate` are present when subject to VAT. */
+  agreement: { title: string | null; amount: string; ht?: string; vatRate?: number; paidAfter: string; remainingAfter: string };
   issuedBy: { name: string };
 }
 
@@ -96,10 +98,12 @@ ${options.cancelled ? '<div class="stamp">وصل ملغى</div>' : ""}
   ${row("عدد القضية", esc(s.case.reference), true)}
   ${row("المحكمة", esc(s.case.court))}
   ${s.agreement.title ? row("موضوع الأتعاب", esc(s.agreement.title)) : ""}
-  ${row("المبلغ المقبوض", `<span class="amount">${esc(formatAmount(s.payment.amount, s.payment.currency))}</span>`)}
+  ${row(s.payment.vat ? "المبلغ المقبوض (بكل الأداءات)" : "المبلغ المقبوض", `<span class="amount">${esc(formatAmount(s.payment.amount, s.payment.currency))}</span>`)}
+  ${s.payment.vat ? row("منه: المبلغ دون اعتبار الأداء", esc(formatAmount(s.payment.vat.ht, s.payment.currency))) : ""}
+  ${s.payment.vat ? row(`منه: الأداء على القيمة المضافة ${s.payment.vat.rate}%`, esc(formatAmount(s.payment.vat.vat, s.payment.currency))) : ""}
   ${row("تاريخ الدفع", formatDate(s.payment.paidOn))}
   ${row("طريقة الدفع", `${esc(METHOD_LABELS[s.payment.method] ?? s.payment.method)}${s.payment.reference ? ` — <bdi dir="ltr">${esc(s.payment.reference)}</bdi>` : ""}`)}
-  ${row("جملة الأتعاب المتفق عليها", esc(formatAmount(s.agreement.amount, s.payment.currency)))}
+  ${row(s.agreement.ht ? `جملة الأتعاب (${formatAmount(s.agreement.ht, s.payment.currency)} + أداء ${s.agreement.vatRate}%)` : "جملة الأتعاب المتفق عليها", esc(formatAmount(s.agreement.amount, s.payment.currency)))}
   ${row("المتبقي بعد هذه الدفعة", esc(formatAmount(s.agreement.remainingAfter, s.payment.currency)))}
   ${s.payment.notes ? row("ملاحظات", esc(s.payment.notes)) : ""}
 </table>

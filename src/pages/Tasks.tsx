@@ -76,8 +76,7 @@ export default function Tasks() {
   return (
     <AppShell title="الأعمال المطلوبة" subtitle="متابعة أعمال المكتب والآجال">
       <div className="space-y-5">
-        {/* Buttons first (right), filters on the left. */}
-        <div className="flex flex-wrap items-end justify-between gap-3 sm:flex-row-reverse">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto">
             <div className="min-w-0 sm:w-48">
               <Select value={assignee} onValueChange={setAssignee}>

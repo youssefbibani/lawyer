@@ -286,7 +286,13 @@ export interface FeeAgreementDTO {
   caseReference: string;
   client: { id: string; fullName: string } | null;
   title: string | null;
+  /** Agreed fees before VAT (HT). */
   amount: string;
+  /** VAT rate in percent (0 = not subject). */
+  vatRate: number;
+  vat: string;
+  /** What the client owes in total (TTC = HT + VAT); paid/remaining are against this. */
+  total: string;
   currency: string;
   paymentTerms: string | null;
   status: FeeAgreementStatus;

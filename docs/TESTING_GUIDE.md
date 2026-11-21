@@ -70,8 +70,7 @@ stays changed. For the intended picture use a freshly seeded database (see §10)
       permissions change on the next request. **Set a new password.** **Deactivate** → they can no longer sign
       in, and nothing of their history disappears.
 - [ ] A password shorter than 10 characters is refused with an Arabic message.
-- [ ] **الإعدادات → المكتب:** change the address → a new receipt shows it. Switch on
-      «الكتبة يسجّلون الدفعات», then see §5.
+- [ ] **الإعدادات → المكتب:** change the address → a new receipt shows it.
 - [ ] **سجل عمليات الخادم:** every action you just did is listed, with who, when and a short Arabic summary.
       No passwords or note contents appear.
 - [ ] You do **not** see any file of the second office.
@@ -138,10 +137,7 @@ stays changed. For the intended picture use a freshly seeded database (see §10)
 - [ ] **الإعدادات**: the **المكتب** card is read-only («يعدّلها مدير المكتب فقط»), and there is no
       **أعضاء المكتب** or **سجل عمليات الخادم** card.
 
-**Then let the administrator change the rule**
-- [ ] Administrator: Settings → المكتب → switch on «الكتبة يسجّلون الدفعات».
-- [ ] Clerk (reload): **الأتعاب** is now available and she can record a payment and issue a receipt — but
-      **cannot void** one. Switch the rule off again afterwards.
+- [ ] Clerk: **الأتعاب** stays unavailable («غير مصرّح»): secretaries never see fees or amounts.
 
 ## 6. Second office — ريم الشريف
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Copy, FileWarning, Info, Loader2, Lock, PercentCircle, Plus, Printer, ReceiptText, Send, TrendingUp, Wallet, X } from "lucide-react";
+import { Banknote, Copy, FileWarning, Info, Loader2, Lock, PercentCircle, Plus, Printer, Send, TrendingUp, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -26,7 +27,7 @@ import { formatArabicDate, formatCurrency } from "@/lib/formatters";
 import { api, isApiError, newIdempotencyKey } from "@/backend/http";
 import { useApiMutation, useCan, useCases, useFee, useFees, useFinanceTotals, useMe } from "@/backend/queries";
 import { PAYMENT_METHOD_LABELS, SETTLEMENT_LABELS, settlementTone } from "@/backend/labels";
-import { formatMoney, percentOf, todayISO } from "@/backend/format";
+import { DEFAULT_VAT_RATE, formatMoney, halfOf, percentOf, previewSplitVat, previewWithVat, todayISO } from "@/backend/format";
 import { PAYMENT_METHODS, type FeeAgreementDTO, type PaymentDTO, type PaymentMethod, type ReceiptDTO, type RecordPaymentResultDTO } from "../../shared/api";
 
 interface PaymentForm {
@@ -53,6 +54,7 @@ export default function Payments() {
   const fees = useFees({ caseId: caseFilter }, canRead);
   const totals = useFinanceTotals(canRead);
   const agreements = useMemo(() => (fees.data?.items ?? []).filter((a) => a.status !== "CANCELLED"), [fees.data]);
+  const unpaid = useMemo(() => agreements.filter((a) => a.settlement !== "PAID"), [agreements]);
 
   const [reminderTarget, setReminderTarget] = useState<FeeAgreementDTO | null>(null);
   const [reminderMessage, setReminderMessage] = useState("");
@@ -63,6 +65,7 @@ export default function Payments() {
   const [issued, setIssued] = useState<ReceiptDTO | null>(null);
   const [historyId, setHistoryId] = useState<string | undefined>();
   const [newAgreementOpen, setNewAgreementOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const idempotency = useRef<string>("");
 
   // Legacy deep link from the demo assistant (local store): /app/payments?receipt=<demo id>.
@@ -151,9 +154,9 @@ export default function Payments() {
         <Send className="h-3.5 w-3.5" />
         تذكير
       </Button>
-      <Button size="sm" variant="outline" disabled={a.settlement === "PAID" || !canRecord} onClick={() => openPayment(a)} title={!canRecord ? "يتطلب صلاحية مالية" : undefined}>
-        <ReceiptText className="h-3.5 w-3.5" />
-        وصل
+      <Button size="sm" variant={a.settlement === "PAID" ? "outline" : "default"} disabled={a.settlement === "PAID" || !canRecord} onClick={() => openPayment(a)} title={!canRecord ? "يتطلب صلاحية مالية" : undefined}>
+        <Banknote className="h-3.5 w-3.5" />
+        تسجيل دفعة
       </Button>
       <Button size="sm" variant="ghost" onClick={() => setHistoryId(a.id)}>
         عرض السجل
@@ -190,9 +193,15 @@ export default function Payments() {
                 </Button>
               )}
               {canManage && (
-                <Button size="sm" onClick={() => setNewAgreementOpen(true)}>
+                <Button size="sm" variant="outline" onClick={() => setNewAgreementOpen(true)}>
                   <Plus className="h-4 w-4" />
                   اتفاق أتعاب جديد
+                </Button>
+              )}
+              {canRecord && (
+                <Button size="sm" variant="gold" onClick={() => setPickerOpen(true)} disabled={unpaid.length === 0} title={unpaid.length ? undefined : "كل الأتعاب مسدّدة"}>
+                  <Banknote className="h-4 w-4" />
+                  دفعة جديدة
                 </Button>
               )}
             </div>
@@ -221,8 +230,8 @@ export default function Payments() {
                   </div>
                   <dl className="grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-sm bg-muted/50 p-2">
-                      <dt className="text-[11px] text-muted-foreground">المتفق عليه</dt>
-                      <dd className="font-mono text-xs">{formatMoney(a.amount, a.currency)}</dd>
+                      <dt className="text-[11px] text-muted-foreground">{a.vatRate ? "الجملي (TTC)" : "المتفق عليه"}</dt>
+                      <dd className="font-mono text-xs">{formatMoney(a.total, a.currency)}</dd>
                     </div>
                     <div className="rounded-sm bg-muted/50 p-2">
                       <dt className="text-[11px] text-muted-foreground">المدفوع</dt>
@@ -233,6 +242,7 @@ export default function Payments() {
                       <dd className="font-mono text-xs text-alert">{formatMoney(a.remaining, a.currency)}</dd>
                     </div>
                   </dl>
+                  <VatLine agreement={a} />
                   {a.paymentCount > 0 && <p className="text-xs text-muted-foreground">{a.paymentCount} دفعات مسجّلة</p>}
                   {actionsFor(a)}
                 </li>
@@ -259,7 +269,10 @@ export default function Payments() {
                         <CaseReference value={a.caseReference} className="mt-1" />
                         {a.paymentCount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">{a.paymentCount} دفعات</p>}
                       </TableCell>
-                      <TableCell className="font-mono">{formatMoney(a.amount, a.currency)}</TableCell>
+                      <TableCell>
+                        <p className="font-mono">{formatMoney(a.total, a.currency)}</p>
+                        <VatLine agreement={a} />
+                      </TableCell>
                       <TableCell className="font-mono text-success">{formatMoney(a.paid, a.currency)}</TableCell>
                       <TableCell className="font-mono text-alert">{formatMoney(a.remaining, a.currency)}</TableCell>
                       <TableCell>
@@ -359,6 +372,27 @@ export default function Payments() {
                 <div className="space-y-1.5">
                   <Label htmlFor="pay-amount">المبلغ المستلم ({payTarget.currency === "TND" ? "د.ت" : payTarget.currency})</Label>
                   <Input id="pay-amount" dir="ltr" inputMode="decimal" className="text-left font-mono" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: "كامل المتبقي", value: payTarget.remaining },
+                      { label: "النصف", value: halfOf(payTarget.remaining) },
+                    ].map((q) => (
+                      <button
+                        key={q.label}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, amount: q.value }))}
+                        className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-gold/60 hover:text-foreground coarse:py-1.5"
+                      >
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
+                  {payTarget.vatRate > 0 && MONEY_RE.test(form.amount.trim()) && Number(form.amount) > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      منه: {formatMoney(previewSplitVat(form.amount.trim(), payTarget.vatRate).ht, payTarget.currency)} دون أداء +{" "}
+                      {formatMoney(previewSplitVat(form.amount.trim(), payTarget.vatRate).vat, payTarget.currency)} أداء {payTarget.vatRate}%
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="pay-date">تاريخ الدفع</Label>
@@ -441,6 +475,23 @@ export default function Payments() {
 
       <AgreementHistoryDialog id={historyId} onClose={() => setHistoryId(undefined)} onOpenCase={(caseId) => navigate(`/app/cases/${caseId}`)} />
       <NewAgreementDialog open={newAgreementOpen} onOpenChange={setNewAgreementOpen} defaultCaseId={caseFilter} />
+
+      {/* «دفعة جديدة»: pick who is paying, then the usual payment form opens. */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>دفعة جديدة</DialogTitle>
+            <DialogDescription>اختر الحريف أو الملف الذي تُسجَّل له الدفعة.</DialogDescription>
+          </DialogHeader>
+          <PayerPicker
+            agreements={unpaid}
+            onPick={(a) => {
+              setPickerOpen(false);
+              openPayment(a);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Demo assistant receipts (local store only) — kept readable, clearly labelled. */}
       <Dialog open={!!legacyReceipt} onOpenChange={(o) => !o && setParams({}, { replace: true })}>
@@ -625,12 +676,16 @@ function NewAgreementDialog({ open, onOpenChange, defaultCaseId }: { open: boole
   const [currency, setCurrency] = useState(me?.office.defaultCurrency ?? "TND");
   const [title, setTitle] = useState("");
   const [terms, setTerms] = useState("");
+  const [vat, setVat] = useState(true);
   const [error, setError] = useState<string>();
   const key = useRef("");
+  const rate = vat ? DEFAULT_VAT_RATE : 0;
   const create = useApiMutation(
-    () => api.post<FeeAgreementDTO>("/fees", { caseId, amount: amount.trim(), currency, title: title.trim() || null, paymentTerms: terms.trim() || null }, key.current),
+    () => api.post<FeeAgreementDTO>("/fees", { caseId, amount: amount.trim(), vatRate: rate, currency, title: title.trim() || null, paymentTerms: terms.trim() || null }, key.current),
     ["finance"],
   );
+  const validAmount = MONEY_RE.test(amount.trim()) && Number(amount) > 0;
+  const preview = validAmount ? previewWithVat(amount.trim(), rate) : null;
 
   useEffect(() => {
     if (open) {
@@ -640,6 +695,7 @@ function NewAgreementDialog({ open, onOpenChange, defaultCaseId }: { open: boole
       setAmount("");
       setTitle("");
       setTerms("");
+      setVat(true);
       setError(undefined);
     }
   }, [open, defaultCaseId]);
@@ -676,13 +732,38 @@ function NewAgreementDialog({ open, onOpenChange, defaultCaseId }: { open: boole
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="fee-amount">المبلغ المتفق عليه</Label>
+              <Label htmlFor="fee-amount">الأتعاب دون اعتبار الأداء (HT)</Label>
               <Input id="fee-amount" dir="ltr" inputMode="decimal" className="text-left font-mono" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fee-currency">العملة</Label>
               <Input id="fee-currency" dir="ltr" maxLength={3} className="text-left font-mono uppercase" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
             </div>
+          </div>
+          <div className="space-y-3 rounded-[var(--radius)] border border-border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="fee-vat" className="font-normal">
+                خاضع للأداء على القيمة المضافة ({DEFAULT_VAT_RATE}%)
+                <span className="block text-xs text-muted-foreground">عطّله فقط للأتعاب المعفاة (مثلاً: الإعانة العدلية).</span>
+              </Label>
+              <Switch id="fee-vat" checked={vat} onCheckedChange={setVat} />
+            </div>
+            {preview && (
+              <dl className="grid grid-cols-3 gap-2 text-center text-xs" aria-label="ملخص المبلغ">
+                <div className="rounded-sm bg-muted/50 p-2">
+                  <dt className="text-muted-foreground">دون أداء (HT)</dt>
+                  <dd className="font-mono">{formatMoney(amount.trim(), currency)}</dd>
+                </div>
+                <div className="rounded-sm bg-muted/50 p-2">
+                  <dt className="text-muted-foreground">الأداء {rate}%</dt>
+                  <dd className="font-mono">{formatMoney(preview.vat, currency)}</dd>
+                </div>
+                <div className="rounded-sm bg-gold/15 p-2">
+                  <dt className="text-muted-foreground">الجملي (TTC)</dt>
+                  <dd className="font-mono font-semibold">{formatMoney(preview.total, currency)}</dd>
+                </div>
+              </dl>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="fee-title">الموضوع (اختياري)</Label>
@@ -709,5 +790,48 @@ function NewAgreementDialog({ open, onOpenChange, defaultCaseId }: { open: boole
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** "HT + VAT" line under an agreement total (nothing when not subject to VAT). */
+function VatLine({ agreement: a }: { agreement: FeeAgreementDTO }) {
+  if (!a.vatRate) return null;
+  return (
+    <p className="mt-0.5 text-[11px] text-muted-foreground">
+      {formatMoney(a.amount, a.currency)} + أداء {a.vatRate}% ({formatMoney(a.vat, a.currency)})
+    </p>
+  );
+}
+
+/** Searchable list of unpaid agreements for «دفعة جديدة». */
+function PayerPicker({ agreements, onPick }: { agreements: FeeAgreementDTO[]; onPick: (a: FeeAgreementDTO) => void }) {
+  const [q, setQ] = useState("");
+  const term = q.trim().toLowerCase();
+  const list = term ? agreements.filter((a) => `${a.client?.fullName ?? ""} ${a.caseReference} ${a.title ?? ""}`.toLowerCase().includes(term)) : agreements;
+  return (
+    <div className="space-y-3">
+      <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث باسم الحريف أو عدد القضية..." aria-label="بحث عن الحريف" />
+      <ul className="max-h-80 space-y-2 overflow-y-auto">
+        {list.length === 0 && <li className="p-3 text-center text-sm text-muted-foreground">لا توجد أتعاب غير مسدّدة مطابقة.</li>}
+        {list.map((a) => (
+          <li key={a.id}>
+            <button
+              type="button"
+              onClick={() => onPick(a)}
+              className="flex min-h-12 w-full items-center justify-between gap-3 rounded-[var(--radius)] border border-border p-3 text-right transition-colors hover:border-gold/60 hover:bg-gold/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="min-w-0">
+                <span className="block font-medium">{a.client?.fullName ?? "—"}</span>
+                <CaseReference value={a.caseReference} className="mt-1" />
+              </span>
+              <span className="shrink-0 text-left">
+                <span className="block text-[11px] text-muted-foreground">المتبقي</span>
+                <span className="font-mono text-sm text-alert">{formatMoney(a.remaining, a.currency)}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

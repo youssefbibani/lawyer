@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigationType } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { DirectionProvider } from "@radix-ui/react-direction";
 
 import { queryClient } from "@/lib/query-client";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -57,41 +58,44 @@ function ScrollToTop() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={200}>
-        <Toaster />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <ScrollToTop />
-          <Routes>
-            <Route path="/" element={<Login />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
-            <Route path="/app" element={<ProtectedLayout />}>
-              <Route index element={page(<Dashboard />)} />
-              <Route path="assistant" element={page(<Assistant />)} />
-              <Route path="assistant/briefs/:id" element={page(<BriefEditor />)} />
-              <Route path="cases" element={page(<Cases />)} />
-              <Route path="cases/:id" element={page(<CaseDetail />)} />
-              <Route path="clients" element={page(<Clients />)} />
-              <Route path="appointments" element={page(<Appointments />)} />
-              <Route path="tasks" element={page(<Tasks />)} />
-              <Route path="archive" element={page(<ArchiveDashboard />)} />
-              <Route path="archive/new" element={page(<BatchCreate />)} />
-              <Route path="archive/batches/:batchId" element={page(<BatchWorkspace />)} />
-              <Route path="archive/batches/:batchId/review/:itemId" element={page(<ReviewWorkspace />)} />
-              <Route path="approvals" element={page(<Approvals />)} />
-              <Route path="search" element={page(<ArchiveSearch />)} />
-              <Route path="document" element={page(<DocumentViewer />)} />
-              <Route path="document/:docId" element={page(<DocumentViewer />)} />
-              <Route path="agenda" element={page(<Agenda />)} />
-              <Route path="payments" element={page(<Payments />)} />
-              <Route path="settings" element={page(<Settings />)} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+    // Arabic, right to left: Radix widgets (tabs, menus, selects…) default to LTR without this.
+    <DirectionProvider dir="rtl">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delayDuration={200}>
+          <Toaster />
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <ScrollToTop />
+            <Routes>
+              <Route path="/" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
+              <Route path="/app" element={<ProtectedLayout />}>
+                <Route index element={page(<Dashboard />)} />
+                <Route path="assistant" element={page(<Assistant />)} />
+                <Route path="assistant/briefs/:id" element={page(<BriefEditor />)} />
+                <Route path="cases" element={page(<Cases />)} />
+                <Route path="cases/:id" element={page(<CaseDetail />)} />
+                <Route path="clients" element={page(<Clients />)} />
+                <Route path="appointments" element={page(<Appointments />)} />
+                <Route path="tasks" element={page(<Tasks />)} />
+                <Route path="archive" element={page(<ArchiveDashboard />)} />
+                <Route path="archive/new" element={page(<BatchCreate />)} />
+                <Route path="archive/batches/:batchId" element={page(<BatchWorkspace />)} />
+                <Route path="archive/batches/:batchId/review/:itemId" element={page(<ReviewWorkspace />)} />
+                <Route path="approvals" element={page(<Approvals />)} />
+                <Route path="search" element={page(<ArchiveSearch />)} />
+                <Route path="document" element={page(<DocumentViewer />)} />
+                <Route path="document/:docId" element={page(<DocumentViewer />)} />
+                <Route path="agenda" element={page(<Agenda />)} />
+                <Route path="payments" element={page(<Payments />)} />
+                <Route path="settings" element={page(<Settings />)} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </DirectionProvider>
   );
 }
 

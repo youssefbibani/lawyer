@@ -129,15 +129,16 @@ describe("role restrictions", () => {
     expect(denied).toBeGreaterThanOrEqual(5);
   });
 
-  it("lets clerks record (not void) payments only when the office allows it", async () => {
+  it("never gives secretaries access to fees, even if the old office switch is on", async () => {
     const office = await createTestOffice({ clerksCanRecordPayments: true });
     const c = await createCaseFor(office);
     const lawyer = as(await login(office.lawyer.email));
     const fee = (await lawyer.post("/fees", { caseId: c.id, amount: "500" })).body;
     const clerk = as(await login(office.clerk.email));
+    expect((await clerk.get("/me")).body.permissions).not.toContain("finance:read");
+    expect((await clerk.get("/fees")).status).toBe(403);
     const pay = await clerk.post("/payments", { agreementId: fee.id, amount: "100", paidOn: "2026-01-02", method: "CASH" }, { "Idempotency-Key": idempotencyKey() });
-    expect(pay.status).toBe(201);
-    expect((await clerk.post(`/payments/${pay.body.payment.id}/void`, { reason: "خطأ" })).status).toBe(403);
+    expect(pay.status).toBe(403);
   });
 
   it("limits clerks to the files they are staffed on", async () => {

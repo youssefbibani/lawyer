@@ -173,7 +173,7 @@ Reminder status: `PENDING → SENT`, or `FAILED` (after 3 e-mail attempts with b
 | Endpoint | Description |
 |---|---|
 | `GET /settings` | `{ office, preferences, profile }`. |
-| `PATCH /settings/office` | Admin. Legal name, contacts, tax id, bar registration, time zone, default currency, file-visibility and clerk-payment policies. |
+| `PATCH /settings/office` | Admin. Legal name, contacts, tax id, bar registration, time zone, default currency and file-visibility policies. (`clerksCanRecordPayments` is accepted but no longer grants anything.) |
 | `PATCH /settings/preferences` | Own notification preferences. |
 | `PATCH /settings/profile` | Own `{ name?, phone?, barNumber? }`. |
 | `GET /settings/members` | Admin: all members including deactivated. |

@@ -485,7 +485,11 @@ model FeeAgreement {
   clientId       String?
   client         Client?            @relation(fields: [clientId, organizationId], references: [id, organizationId], onDelete: Restrict)
   title          String?
+  /// Agreed fees before VAT (HT).
   amount         Decimal            @db.Decimal(14, 3)
+  /// VAT rate in percent applied on top of `amount` (19 for Tunisian lawyer fees, 0 = not subject).
+  /// Agreements created before VAT support keep 0, so their totals never change.
+  vatRate        Decimal            @default(0) @db.Decimal(5, 2)
   currency       String             @default("TND") @db.Char(3)
   paymentTerms   String?
   status         FeeAgreementStatus @default(ACTIVE)

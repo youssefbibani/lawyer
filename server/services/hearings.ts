@@ -29,7 +29,7 @@ const createBody = z.object({
   court: requiredText(200, "يرجى إدخال المحكمة"),
   chamber: optionalText(200),
   room: optionalText(100),
-  type: requiredText(100, "يرجى إدخال نوع الجلسة"),
+  type: requiredText(100, "يرجى إدخال موضوع الجلسة"),
   notes: optionalText(2000),
   acknowledgeConflicts: z.boolean().default(false),
 });
@@ -41,7 +41,7 @@ const updateBody = z.object({
   court: requiredText(200, "يرجى إدخال المحكمة").optional(),
   chamber: optionalText(200),
   room: optionalText(100),
-  type: requiredText(100, "يرجى إدخال نوع الجلسة").optional(),
+  type: requiredText(100, "يرجى إدخال موضوع الجلسة").optional(),
   notes: optionalText(2000),
   reason: optionalText(500),
   acknowledgeConflicts: z.boolean().default(false),

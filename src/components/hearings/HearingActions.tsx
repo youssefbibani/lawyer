@@ -27,8 +27,12 @@ const EVENT_LABELS: Record<HearingEventDTO["kind"], string> = {
   CANCELLED: "إلغاء",
 };
 
-/** Per-hearing actions: reschedule, record the outcome (held / postponed / cancelled) and view history. */
-export function HearingActions({ hearing }: { hearing: HearingDTO }) {
+/**
+ * Per-hearing actions: reschedule, record the outcome (held / postponed / cancelled) and view history.
+ * "board" (weekly board cards): the office's three main buttons — تأجيل، إلغاء، مسلّم — full width,
+ * with edit and history as small icon buttons.
+ */
+export function HearingActions({ hearing, variant = "list" }: { hearing: HearingDTO; variant?: "list" | "board" }) {
   const can = useCan();
   const [editing, setEditing] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -113,9 +117,47 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
     );
   }
 
+  const board = variant === "board";
+  const iconBtn = "h-8 w-8 shrink-0 text-muted-foreground coarse:h-10 coarse:w-10";
+
   // The options are shown as visible buttons (no hidden "⋮" menu).
   return (
     <>
+      {board ? (
+        <div className="space-y-1.5" role="group" aria-label={`إجراءات الجلسة: ${hearing.type}`}>
+          {scheduled && (
+            <div className="grid grid-cols-3 gap-1">
+              <Button type="button" variant="outline" size="sm" className="h-8 px-1 text-xs coarse:h-10" onClick={() => open("POSTPONED")}>
+                تأجيل
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-1 text-xs text-alert hover:text-alert coarse:h-10"
+                onClick={() => open("CANCELLED")}
+                disabled={!can("hearing:cancel")}
+                title={can("hearing:cancel") ? undefined : "إلغاء الجلسات مقصور على المحامين"}
+              >
+                إلغاء
+              </Button>
+              <Button type="button" size="sm" className="h-8 bg-success px-1 text-xs text-success-foreground hover:bg-success/90 coarse:h-10" onClick={() => open("HELD")} title="تسجيل انعقاد الجلسة">
+                مسلّم
+              </Button>
+            </div>
+          )}
+          <div className="flex justify-end gap-0.5">
+            {scheduled && (
+              <Button type="button" variant="ghost" size="icon" className={iconBtn} onClick={() => setEditing(true)} aria-label={`تعديل الجلسة: ${hearing.clientName}`} title="تعديل">
+                <CalendarClock className="h-4 w-4" />
+              </Button>
+            )}
+            <Button type="button" variant="ghost" size="icon" className={iconBtn} onClick={() => setHistoryOpen(true)} aria-label={`سجل الجلسة: ${hearing.clientName}`} title="سجل الجلسة">
+              <History className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`إجراءات الجلسة: ${hearing.type}`}>
         {scheduled && (
           <>
@@ -141,6 +183,7 @@ export function HearingActions({ hearing }: { hearing: HearingDTO }) {
         )}
         {historyButton}
       </div>
+      )}
 
       <HearingDialog open={editing} onOpenChange={setEditing} hearing={hearing} />
 

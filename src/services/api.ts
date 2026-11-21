@@ -299,7 +299,7 @@ const hearingInput = z.object({
   caseId: z.string().min(1, "يرجى اختيار القضية"),
   court: z.string().trim().min(1, "يرجى إدخال المحكمة"),
   room: z.string().trim().min(1, "يرجى إدخال القاعة"),
-  type: z.string().trim().min(1, "يرجى إدخال نوع الجلسة"),
+  type: z.string().trim().min(1, "يرجى إدخال موضوع الجلسة"),
   date: isoDate,
   time: hhmm,
 });

@@ -140,7 +140,7 @@ const SPECS: Record<OperationType, OperationSpec> = {
           changes: [
             { label: "التاريخ", after: day(h.date) },
             { label: "الساعة", after: h.time },
-            { label: "نوع الجلسة", after: h.type },
+            { label: "موضوع الجلسة", after: h.type },
             { label: "المحكمة", after: h.court },
             { label: "القاعة", after: h.room },
           ],
@@ -158,7 +158,7 @@ const SPECS: Record<OperationType, OperationSpec> = {
     editable: [
       { key: "date", label: "التاريخ", type: "date" },
       { key: "time", label: "الساعة", type: "time" },
-      { key: "type", label: "نوع الجلسة", type: "text" },
+      { key: "type", label: "موضوع الجلسة", type: "text" },
       { key: "room", label: "القاعة", type: "text" },
     ],
   },

@@ -47,7 +47,7 @@ test.describe("lawyer workflows (real server and database)", () => {
   test("records a payment and downloads the real Arabic PDF receipt", async ({ page }) => {
     await page.goto("/app/payments");
     const row = page.getByRole("row").filter({ hasText: "حريف التجربة الأول" });
-    await row.getByRole("button", { name: "وصل" }).click();
+    await row.getByRole("button", { name: "تسجيل دفعة" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(/المبلغ المستلم/).fill("450.500");
     await dialog.getByRole("button", { name: "متابعة" }).click();

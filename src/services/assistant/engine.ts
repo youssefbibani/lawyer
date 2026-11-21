@@ -583,7 +583,7 @@ function planWrite(intent: WriteIntent, parsed: ParsedMessage, ctx: EngineContex
         action.inferences.push(...parsed.time.notes);
       }
       f.hearingType = parsed.hearingType ?? "جلسة استماع";
-      if (!parsed.hearingType) action.inferences.push("نوع الجلسة غير مذكور: اعتُبرت «جلسة استماع» (قابل للتعديل)");
+      if (!parsed.hearingType) action.inferences.push("موضوع الجلسة غير مذكور: اعتُبرت «جلسة استماع» (قابل للتعديل)");
       f.court = "قصر العدالة بتونس";
       f.room = "تُحدَّد لاحقاً";
       if (f.date && f.date < toISODate(now)) action.ambiguities.push("التاريخ المحدد في الماضي.");

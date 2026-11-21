@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,38 @@ import { api, isApiError } from "@/backend/http";
 import { useApiMutation, useCan, useMe, useSettings } from "@/backend/queries";
 import type { NotificationPreferenceDTO, OfficeSettingsDTO, ProfileDTO } from "../../../shared/api";
 
+/** Save / undo bar: active only when the form differs from what is saved. */
+function SaveBar({ dirty, pending, label, onUndo }: { dirty: boolean; pending: boolean; label: string; onUndo: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button type="submit" variant="gold" disabled={!dirty || pending}>
+        {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+        {label}
+      </Button>
+      {dirty && !pending && (
+        <>
+          <Button type="button" variant="ghost" onClick={onUndo}>
+            <Undo2 className="h-4 w-4" />
+            تراجع
+          </Button>
+          <span role="status" className="flex items-center gap-1.5 text-xs text-gold-deep">
+            <span className="h-1.5 w-1.5 rounded-full bg-gold-deep" aria-hidden="true" />
+            تغييرات غير محفوظة
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 const errorText = (err: unknown) => (isApiError(err) && err.details.length ? err.details.map((d) => d.message).join(" — ") : (err as Error).message);
 
 export function ProfileCard() {
   const settings = useSettings();
   const [form, setForm] = useState({ name: "", phone: "", barNumber: "" });
   const profile = settings.data?.profile;
+  const saved = profile ? { name: profile.name, phone: profile.phone ?? "", barNumber: profile.barNumber ?? "" } : form;
+  const dirty = !!profile && (form.name !== saved.name || form.phone !== saved.phone || form.barNumber !== saved.barNumber);
   useEffect(() => {
     if (profile) setForm({ name: profile.name, phone: profile.phone ?? "", barNumber: profile.barNumber ?? "" });
   }, [profile]);
@@ -62,10 +88,7 @@ export function ProfileCard() {
               <Input id="phone" dir="ltr" className="text-left" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
             </div>
             <div className="sm:col-span-2">
-              <Button type="submit" variant="gold" disabled={save.isPending}>
-                {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                حفظ الملف الشخصي
-              </Button>
+              <SaveBar dirty={dirty} pending={save.isPending} label="حفظ الملف الشخصي" onUndo={() => setForm(saved)} />
             </div>
           </form>
         )}
@@ -90,7 +113,9 @@ export function OfficeCard() {
   }, [settings.data]);
   const save = useApiMutation((body: OfficeForm) => api.patch<OfficeSettingsDTO>("/settings/office", body), ["settings"]);
 
-  if (!form) return null;
+  if (!form || !settings.data) return null;
+  const savedOffice = settings.data.office as OfficeForm;
+  const dirty = (Object.keys(form) as (keyof OfficeForm)[]).some((k) => (form[k] ?? "") !== (savedOffice[k] ?? ""));
   const text = (key: keyof OfficeForm, label: string, ltr = false) => (
     <div className="space-y-1.5">
       <Label htmlFor={`office-${key}`}>{label}</Label>
@@ -119,7 +144,7 @@ export function OfficeCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Building2 className="h-5 w-5 text-gold-deep" aria-hidden="true" />
-          المكتب
+          بيانات المكتب
         </CardTitle>
         <CardDescription>{editable ? "تظهر هذه البيانات على وصولات الأتعاب." : "يعدّلها مدير المكتب فقط."}</CardDescription>
       </CardHeader>
@@ -144,16 +169,11 @@ export function OfficeCard() {
           </div>
           <div className="space-y-3 rounded-[var(--radius)] border border-border p-3">
             <p className="text-sm font-medium">سياسة الاطلاع على الملفات</p>
+            {!editable && <p className="text-xs text-muted-foreground">يغيّرها مدير المكتب فقط.</p>}
             {policy("lawyersSeeAllCases", "المحامون يرون كل ملفات المكتب", "عند التعطيل يرى المحامي الملفات المكلّف بها أو المضاف إلى فريقها فقط.")}
             {policy("clerksSeeAllCases", "الكتبة يرون كل ملفات المكتب", "عند التعطيل ترى الكاتبة الملفات المضافة إلى فريقها فقط.")}
-            {policy("clerksCanRecordPayments", "الكتبة يسجّلون الدفعات", "تسجيل الدفعات وإصدار الوصولات فقط؛ إلغاء الدفعات يبقى للمحامين والمدير.")}
           </div>
-          {editable && (
-            <Button type="submit" variant="gold" disabled={save.isPending}>
-              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              حفظ إعدادات المكتب
-            </Button>
-          )}
+          {editable && <SaveBar dirty={dirty} pending={save.isPending} label="حفظ إعدادات المكتب" onUndo={() => setForm({ ...savedOffice })} />}
         </form>
       </CardContent>
     </Card>
@@ -185,7 +205,6 @@ export function NotificationsCard() {
               [
                 ["hearingReminders", "تذكيرات الجلسات", undefined],
                 ["taskReminders", "تذكيرات المهام", undefined],
-                ["scheduleConflicts", "تعارض المواعيد", undefined],
                 ["emailEnabled", "إشعارات البريد الإلكتروني", mailConfigured ? undefined : "غير متاح: خدمة البريد غير مهيأة على الخادم"],
               ] as [keyof NotificationPreferenceDTO, string, string | undefined][]
             ).map(([key, label, hint]) => (
@@ -197,13 +216,6 @@ export function NotificationsCard() {
                 <Switch id={key} checked={Boolean(prefs[key]) && (key !== "emailEnabled" || mailConfigured)} disabled={save.isPending || (key === "emailEnabled" && !mailConfigured)} onCheckedChange={(v) => toggle(key, v)} />
               </div>
             ))}
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="smsNotifications" className="font-normal">
-                إشعارات SMS
-                <span className="block text-xs text-muted-foreground">غير متاح: لا يوجد مزوّد رسائل قصيرة مرتبط</span>
-              </Label>
-              <Switch id="smsNotifications" checked={false} disabled />
-            </div>
           </>
         )}
       </CardContent>

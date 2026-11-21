@@ -234,7 +234,7 @@ membership table on every request — never from the request. Permissions:
 | Read / write clients, read / create / edit cases, notes, schedule hearings, tasks | ✓ | ✓ | ✓ |
 | Change case status, reassign lawyer, edit case staff | ✓ | ✓ | — |
 | Cancel hearings | ✓ | ✓ | — |
-| Read finances, record payments | ✓ | ✓ | only if the office enables «الكتبة يسجّلون الدفعات» |
+| Read finances, record payments | ✓ | ✓ | — (never) |
 | Manage fee agreements, void payments | ✓ | ✓ | — |
 | Office settings, members, server audit log | ✓ | — | — |
 

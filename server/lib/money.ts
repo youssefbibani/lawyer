@@ -22,3 +22,18 @@ export function sum(values: (Decimal | string | number)[]): Decimal {
 }
 
 export const CURRENCY_RE = /^[A-Z]{3}$/;
+
+/** VAT rates in force in Tunisia (percent). Lawyer fees: 19. */
+export const VAT_RATES = [0, 7, 13, 19] as const;
+
+/** Total due including VAT: HT × (1 + rate/100), rounded to the millime. */
+export function withVat(ht: Decimal | string, rate: Decimal | string | number): Decimal {
+  return new Decimal(ht).times(new Decimal(100).plus(rate)).dividedBy(100).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
+}
+
+/** Splits an amount that includes VAT into its HT and VAT parts (millimes; HT + VAT = amount exactly). */
+export function splitVat(ttc: Decimal | string, rate: Decimal | string | number): { ht: Decimal; vat: Decimal } {
+  const total = new Decimal(ttc);
+  const ht = total.times(100).dividedBy(new Decimal(100).plus(rate)).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
+  return { ht, vat: total.minus(ht) };
+}

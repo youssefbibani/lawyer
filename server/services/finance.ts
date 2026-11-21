@@ -27,7 +27,7 @@ import { prisma, type Tx } from "../db.js";
 import type { Ctx } from "../http/context.js";
 import { AppError, notFound, versionConflict } from "../http/errors.js";
 import { currency, id, isoDate, moneyString, optionalText, pageArgs, pagination, parse, requiredText, version } from "../http/validation.js";
-import { Decimal, money, parseMoney, sum } from "../lib/money.js";
+import { Decimal, money, parseMoney, splitVat, sum, VAT_RATES, withVat } from "../lib/money.js";
 import { dateOnly, formatDateOnly, todayIn } from "../lib/time.js";
 import { audit } from "./audit.js";
 import { assertCan, caseScope } from "./authorization.js";
@@ -36,16 +36,28 @@ import { renderReceipt, type ReceiptSnapshot } from "./receipt-pdf.js";
 
 // ——— Fee agreements ———
 
+/** HT / VAT split of one payment (payments are amounts actually received, VAT included). */
+function vatBreakdown(amount: Decimal, rate: Decimal | string | number) {
+  const { ht, vat } = splitVat(amount, rate);
+  return { rate: Number(rate), ht: money(ht), vat: money(vat) };
+}
+
+/** VAT rate in percent; `amount` is always before VAT (HT). Omitted = not subject to VAT. */
+const vatRate = z
+  .number({ invalid_type_error: "نسبة الأداء على القيمة المضافة غير صالحة" })
+  .refine((v) => (VAT_RATES as readonly number[]).includes(v), `نسبة الأداء على القيمة المضافة يجب أن تكون إحدى: ${VAT_RATES.join("، ")}%`);
+
 const agreementBody = z.object({
   caseId: id,
   clientId: id.optional(),
   title: optionalText(200),
   amount: moneyString,
+  vatRate: vatRate.optional(),
   currency: currency.optional(),
   paymentTerms: optionalText(1000),
 });
 
-const agreementUpdate = z.object({ title: optionalText(200), amount: moneyString.optional(), paymentTerms: optionalText(1000), version });
+const agreementUpdate = z.object({ title: optionalText(200), amount: moneyString.optional(), vatRate: vatRate.optional(), paymentTerms: optionalText(1000), version });
 
 const agreementList = pagination.extend({
   caseId: id.optional(),
@@ -83,6 +95,7 @@ async function agreementReplay(ctx: Ctx, key: string, input: z.infer<typeof agre
   const same =
     existing.caseId === input.caseId &&
     new Decimal(existing.amount).eq(parseMoney(input.amount)) &&
+    new Decimal(existing.vatRate).eq(input.vatRate ?? 0) &&
     existing.currency === (input.currency ?? ctx.actor.office.defaultCurrency) &&
     (input.clientId === undefined || existing.clientId === input.clientId);
   if (!same) throw new AppError("IDEMPOTENCY_KEY_REUSED", "مفتاح العملية مستعمل لاتفاق مختلف. أعد فتح النموذج وأعد المحاولة.");
@@ -124,6 +137,7 @@ async function createAgreementTx(ctx: Ctx, input: z.infer<typeof agreementBody>,
         clientId,
         title: input.title ?? null,
         amount: parseMoney(input.amount),
+        vatRate: input.vatRate ?? 0,
         currency: input.currency ?? ctx.actor.office.defaultCurrency,
         paymentTerms: input.paymentTerms ?? null,
         idempotencyKey: idempotencyKey ?? null,
@@ -131,7 +145,7 @@ async function createAgreementTx(ctx: Ctx, input: z.infer<typeof agreementBody>,
       },
       include: agreementInclude,
     });
-    await audit(tx, ctx, { resourceType: "fee_agreement", resourceId: a.id, caseId: c.id, operation: "fee.create", summary: `اتفاق أتعاب للملف ${c.reference}`, after: { amount: a.amount, currency: a.currency } });
+    await audit(tx, ctx, { resourceType: "fee_agreement", resourceId: a.id, caseId: c.id, operation: "fee.create", summary: `اتفاق أتعاب للملف ${c.reference}`, after: { amount: a.amount, vatRate: a.vatRate, currency: a.currency } });
     return a;
   });
 }
@@ -160,14 +174,17 @@ export async function updateAgreement(ctx: Ctx, agreementId: string, raw: unknow
     if (a.status === "CANCELLED") throw new AppError("CONFLICT", "اتفاق الأتعاب ملغى ولا يمكن تعديله.");
     const paid = await paidTotal(tx, agreementId);
     const amount = input.amount ? parseMoney(input.amount) : new Decimal(a.amount);
-    if (amount.lt(paid)) throw new AppError("VALIDATION_FAILED", `لا يمكن أن يقل المبلغ المتفق عليه عن المبالغ المقبوضة (${money(paid)}).`);
+    const rate = input.vatRate ?? new Decimal(a.vatRate);
+    const total = withVat(amount, rate);
+    if (total.lt(paid)) throw new AppError("VALIDATION_FAILED", `لا يمكن أن يقل المبلغ الجملي (بما فيه الأداءات) عن المبالغ المقبوضة (${money(paid)}).`);
     const result = await tx.feeAgreement.updateMany({
       where: { id: agreementId, organizationId: ctx.actor.organizationId, version: input.version },
       data: {
         title: input.title === undefined ? a.title : input.title,
         paymentTerms: input.paymentTerms === undefined ? a.paymentTerms : input.paymentTerms,
         amount,
-        status: amount.eq(paid) ? "SETTLED" : "ACTIVE",
+        vatRate: rate,
+        status: total.eq(paid) ? "SETTLED" : "ACTIVE",
         version: { increment: 1 },
       },
     });
@@ -178,8 +195,8 @@ export async function updateAgreement(ctx: Ctx, agreementId: string, raw: unknow
       caseId: a.caseId,
       operation: "fee.update",
       summary: `تعديل اتفاق الأتعاب للملف ${a.case.reference}`,
-      before: { amount: a.amount },
-      after: { amount },
+      before: { amount: a.amount, vatRate: a.vatRate },
+      after: { amount, vatRate: rate },
     });
   });
   return agreementDTO(await prisma.feeAgreement.findUniqueOrThrow({ where: { id: agreementId }, include: agreementInclude }));
@@ -206,7 +223,7 @@ export async function financeTotals(ctx: Ctx): Promise<FinanceTotalsDTO[]> {
   for (const dto of rows.map(agreementDTO)) byCurrency.set(dto.currency, [...(byCurrency.get(dto.currency) ?? []), dto]);
   return [...byCurrency.entries()].map(([cur, list]) => ({
     currency: cur,
-    agreed: money(sum(list.map((a) => a.amount))),
+    agreed: money(sum(list.map((a) => a.total))),
     paid: money(sum(list.map((a) => a.paid))),
     remaining: money(sum(list.map((a) => a.remaining))),
     agreementCount: list.length,
@@ -274,7 +291,8 @@ export async function recordPayment(ctx: Ctx, raw: unknown, idempotencyKey: stri
         if (a.status === "CANCELLED") throw new AppError("CONFLICT", "اتفاق الأتعاب ملغى.");
         const amount = parseMoney(input.amount);
         const paid = await paidTotal(tx, a.id);
-        const remaining = new Decimal(a.amount).minus(paid);
+        const total = withVat(a.amount, a.vatRate);
+        const remaining = total.minus(paid);
         if (remaining.lte(0)) throw new AppError("OVERPAYMENT", "هذه الأتعاب مسدّدة بالكامل.", { data: { remaining: money(0) } });
         if (amount.gt(remaining)) {
           throw new AppError("OVERPAYMENT", `المبلغ يتجاوز المتبقي المستحق (${money(remaining)} ${a.currency}).`, { data: { remaining: money(remaining) } });
@@ -320,8 +338,22 @@ export async function recordPayment(ctx: Ctx, raw: unknown, idempotencyKey: stri
           },
           client: client ? { fullName: client.fullName, nationalId: client.nationalId } : null,
           case: { reference: a.case.reference, court: a.case.court },
-          payment: { amount: money(amount), currency: a.currency, paidOn: input.paidOn, method: input.method, reference: input.reference ?? null, notes: input.notes ?? null },
-          agreement: { title: a.title, amount: money(a.amount), paidAfter: money(paidAfter), remainingAfter: money(new Decimal(a.amount).minus(paidAfter)) },
+          payment: {
+            amount: money(amount),
+            currency: a.currency,
+            paidOn: input.paidOn,
+            method: input.method,
+            reference: input.reference ?? null,
+            notes: input.notes ?? null,
+            ...(new Decimal(a.vatRate).gt(0) ? { vat: vatBreakdown(amount, a.vatRate) } : {}),
+          },
+          agreement: {
+            title: a.title,
+            amount: money(total),
+            ...(new Decimal(a.vatRate).gt(0) ? { ht: money(a.amount), vatRate: Number(a.vatRate) } : {}),
+            paidAfter: money(paidAfter),
+            remainingAfter: money(total.minus(paidAfter)),
+          },
           issuedBy: { name: ctx.actor.name },
         };
         const receipt = await tx.receipt.create({
@@ -340,7 +372,7 @@ export async function recordPayment(ctx: Ctx, raw: unknown, idempotencyKey: stri
             snapshot: snapshot as unknown as Prisma.InputJsonValue,
           },
         });
-        if (paidAfter.gte(a.amount)) {
+        if (paidAfter.gte(total)) {
           await tx.feeAgreement.update({ where: { id: a.id }, data: { status: "SETTLED", version: { increment: 1 } } });
         }
         await audit(tx, ctx, {
