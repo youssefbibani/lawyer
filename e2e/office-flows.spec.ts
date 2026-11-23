@@ -33,7 +33,7 @@ test.describe("lawyer workflows (real server and database)", () => {
 
     // A second hearing of the same lawyer, same day, on another file: no clash warning any more.
     await page.goto("/app/agenda");
-    await page.getByRole("button", { name: "إضافة جلسة" }).click();
+    await page.getByRole("button", { name: "إضافة جلسة", exact: true }).click();
     dialog = page.getByRole("dialog");
     await dialog.getByRole("combobox", { name: "القضية" }).click();
     await page.getByRole("option").filter({ hasText: `E2E/${a.tag}/2` }).click();

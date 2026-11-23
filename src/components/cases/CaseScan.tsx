@@ -32,7 +32,6 @@ export function CaseScan({ onApply, onUndo }: { onApply: (values: Partial<Record
   const [preview, setPreview] = useState<string>();
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [edited, setEdited] = useState<Record<string, string>>({});
-  const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const run = useRef(0);
 
@@ -78,12 +77,11 @@ export function CaseScan({ onApply, onUndo }: { onApply: (values: Partial<Record
     setPhase({ kind: "done", count });
   }
 
+  // One picker: on phones it already offers "Camera" or "Photos"; on computers it opens the file chooser.
   const inputs = (
-    <>
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => (void read(e.target.files?.[0]), (e.target.value = ""))} />
-      <input ref={fileRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => (void read(e.target.files?.[0]), (e.target.value = ""))} />
-    </>
+    <input ref={fileRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => (void read(e.target.files?.[0]), (e.target.value = ""))} />
   );
+  const pick = () => fileRef.current?.click();
 
   if (phase.kind === "done") {
     return (
@@ -100,36 +98,43 @@ export function CaseScan({ onApply, onUndo }: { onApply: (values: Partial<Record
     );
   }
 
+  // Idle: one slim line — a button and a short privacy hint.
+  if (phase.kind === "idle") {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {inputs}
+        <button
+          type="button"
+          onClick={pick}
+          aria-label="تصوير وثيقة"
+          className="inline-flex h-9 items-center gap-2 rounded-full border border-dashed border-gold/70 bg-gold/5 pe-4 ps-1 text-sm font-medium transition-colors hover:border-gold hover:bg-gold/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring coarse:h-11"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold text-ink" aria-hidden="true">
+            <Camera className="h-3.5 w-3.5" />
+          </span>
+          املأ من صورة وثيقة
+        </button>
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          تُقرأ على جهازك، ولا تُرسل
+        </span>
+      </div>
+    );
+  }
+
   return (
     <section aria-label="تعبئة من صورة وثيقة" className="overflow-hidden rounded-[var(--radius)] border border-dashed border-gold/60 bg-gold/5">
       {inputs}
-      {/* Strip: icon button + what it does. */}
-      <div className="flex flex-wrap items-center gap-3 p-3">
-        <button
-          type="button"
-          onClick={() => cameraRef.current?.click()}
-          disabled={phase.kind === "reading"}
-          aria-label="تصوير وثيقة"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gold text-ink shadow-gold transition-transform hover:bg-gold-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:opacity-60"
-        >
-          <Camera className="h-5 w-5" aria-hidden="true" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">املأ الخانات من صورة وثيقة</p>
-          <p className="text-xs text-muted-foreground">صوّر عريضة أو استدعاءً أو حكماً، ونقترح عليك البيانات لتراجعها قبل التعبئة.</p>
-        </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={phase.kind === "reading"}>
+      <div className="flex items-center justify-between gap-3 px-3 py-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <Camera className="h-4 w-4 text-gold-deep" aria-hidden="true" />
+          املأ من صورة وثيقة
+        </p>
+        <Button type="button" size="sm" variant="ghost" onClick={pick} disabled={phase.kind === "reading"}>
           <ImageUp className="h-4 w-4" />
-          من الجهاز
+          صورة أخرى
         </Button>
       </div>
-
-      {phase.kind === "idle" && (
-        <p className="flex items-center gap-1.5 border-t border-gold/20 px-3 py-2 text-[11px] text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          تُقرأ الصورة على جهازك ولا تُرسل إلى أي خدمة خارجية.
-        </p>
-      )}
 
       {phase.kind === "reading" && (
         <div className="flex items-center gap-3 border-t border-gold/20 p-3" aria-live="polite">

@@ -157,7 +157,7 @@ export default function Cases() {
               <TableHeader>
                 <TableRow>
                   <TableHead>عدد القضية</TableHead>
-                  <TableHead>الحريف</TableHead>
+                  <TableHead>اسم المنوب</TableHead>
                   <TableHead>النوع</TableHead>
                   <TableHead>المحكمة</TableHead>
                   <TableHead>الجلسة القادمة</TableHead>

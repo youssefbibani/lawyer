@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
-import { Bell, Check, MoreVertical, Pencil, Repeat, Trash2 } from "lucide-react";
+import { Bell, Check, Pencil, Repeat, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { RECURRENCE_LABELS, priorityLabel, priorityTone } from "@/lib/status";
 import { formatRelativeDay } from "@/lib/formatters";
 import { toUiPriority, toUiRecurrence } from "@/backend/labels";
@@ -119,29 +118,35 @@ export function TaskItem({ task, onToggle, onEdit, onDelete, highlighted, showCa
         {status.length > 0 && <p className="text-[11px] text-muted-foreground/90">{status.join(" • ")}</p>}
       </div>
 
-      <DropdownMenu dir="rtl">
-        <DropdownMenuTrigger asChild>
+      {/* Visible actions (no hidden "⋮" menu): a small two-icon pill in the card's top corner. Quiet grey by
+          default; delete turns red only on hover/focus so it never shouts. */}
+      <div
+        className="flex shrink-0 items-center self-start overflow-hidden rounded-full border border-border bg-card shadow-sm"
+        role="group"
+        aria-label={`إجراءات: ${task.title}`}
+      >
+        {!completed && (
           <button
             type="button"
-            aria-label={`إجراءات: ${task.title}`}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onEdit(task)}
+            aria-label={`تعديل: ${task.title}`}
+            title="تعديل"
+            className="flex h-8 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:bg-secondary focus-visible:outline-none coarse:h-10 coarse:w-11"
           >
-            <MoreVertical className="h-4 w-4" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {!completed && (
-            <DropdownMenuItem onSelect={() => onEdit(task)} className="min-h-11">
-              <Pencil className="h-4 w-4" />
-              تعديل
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => onDelete(task)} className="min-h-11 text-alert focus:text-alert">
-            <Trash2 className="h-4 w-4" />
-            حذف
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        )}
+        {!completed && <span className="h-4 w-px bg-border" aria-hidden="true" />}
+        <button
+          type="button"
+          onClick={() => onDelete(task)}
+          aria-label={`حذف: ${task.title}`}
+          title="حذف"
+          className="flex h-8 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-alert/10 hover:text-alert focus-visible:bg-alert/10 focus-visible:text-alert focus-visible:outline-none coarse:h-10 coarse:w-11"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </li>
   );
 }

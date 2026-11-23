@@ -113,7 +113,7 @@ export default function CaseDetail() {
 
   if (caseQuery.isPending) {
     return (
-      <AppShell title="القضية" backTo="/app/cases">
+      <AppShell title="القضية" backTo="/app/cases" backLabel="القضايا">
         <SkeletonCards count={3} />
       </AppShell>
     );
@@ -122,7 +122,7 @@ export default function CaseDetail() {
   if (!legalCase) {
     const missing = isApiError(caseQuery.error, "NOT_FOUND") || !caseQuery.error;
     return (
-      <AppShell title="القضية غير متاحة" backTo="/app/cases">
+      <AppShell title="القضية غير متاحة" backTo="/app/cases" backLabel="القضايا">
         <EmptyState
           icon={FileQuestion}
           title={missing ? "تعذر العثور على القضية" : "تعذر تحميل القضية"}
@@ -169,7 +169,7 @@ export default function CaseDetail() {
   ].filter((a) => a.show);
 
   return (
-    <AppShell title={clientNames} subtitle={CASE_TYPE_LABELS[legalCase.type]} backTo="/app/cases">
+    <AppShell title={clientNames} subtitle={CASE_TYPE_LABELS[legalCase.type]} backTo="/app/cases" backLabel="القضايا">
       <div className="space-y-5 sm:space-y-6">
         <div className="flex flex-wrap items-center gap-2">
           <CaseReference value={legalCase.reference} />
@@ -313,7 +313,7 @@ export default function CaseDetail() {
 
               <TabsContent value="hearings" className="space-y-4">
                 {legalCase.can.scheduleHearing && legalCase.status !== "CLOSED" && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-start">
                     <Button onClick={() => setHearingDialogOpen(true)} className="w-full sm:w-auto">
                       <CalendarPlus className="h-4 w-4" />
                       تحديد جلسة
@@ -358,7 +358,7 @@ export default function CaseDetail() {
               </TabsContent>
 
               <TabsContent value="tasks" className="space-y-4">
-                <div className="flex justify-end">
+                <div className="flex justify-start">
                   <Button onClick={taskActions.openNew} className="w-full sm:w-auto">
                     <Plus className="h-4 w-4" />
                     مهمة لهذا الملف

@@ -16,6 +16,8 @@ interface AppShellProps {
   actions?: ReactNode;
   /** Shows a back button (mobile-first deep pages). */
   backTo?: string;
+  /** Name of the page the back button returns to (shown next to the arrow on desktop), e.g. «القضايا». */
+  backLabel?: string;
   /** Full-height pages (assistant) manage their own scrolling and hide the bottom bar. */
   fullHeight?: boolean;
   mainClassName?: string;
@@ -23,7 +25,7 @@ interface AppShellProps {
   actionBar?: boolean;
 }
 
-export function AppShell({ children, title, subtitle, actions, backTo, fullHeight = false, mainClassName, actionBar = false }: AppShellProps) {
+export function AppShell({ children, title, subtitle, actions, backTo, backLabel, fullHeight = false, mainClassName, actionBar = false }: AppShellProps) {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
   const [quickQuery, setQuickQuery] = useState("");
@@ -57,9 +59,20 @@ export function AppShell({ children, title, subtitle, actions, backTo, fullHeigh
         <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 md:h-16 md:px-6 xl:px-8">
           {(fullHeight || actionBar) && <MobileNavigation />}
           {backTo && (
-            <Button variant="ghost" size="icon" aria-label="رجوع" onClick={() => navigate(backTo)} className="shrink-0 lg:hidden">
-              <ArrowRight className="h-5 w-5" />
-            </Button>
+            <>
+              {/* Back to the parent page, on every screen: arrow only on phones, arrow + page name on desktop. */}
+              <Button
+                variant="ghost"
+                onClick={() => navigate(backTo)}
+                aria-label={backLabel ? `رجوع إلى ${backLabel}` : "رجوع"}
+                title={backLabel ? `رجوع إلى ${backLabel}` : "رجوع"}
+                className="h-10 w-10 shrink-0 gap-1.5 px-0 text-muted-foreground hover:text-foreground lg:w-auto lg:px-3"
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span className="hidden text-sm lg:inline">{backLabel ?? "رجوع"}</span>
+              </Button>
+              <span className="hidden h-7 w-px shrink-0 bg-border lg:block" aria-hidden="true" />
+            </>
           )}
 
           <div className="min-w-0 flex-1">
